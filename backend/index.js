@@ -6,8 +6,29 @@ const fs = require('fs');
 const { PrismaClient } = require('@prisma/client');
 
 const app = express();
-const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
+
+// Fix for Vercel SQLite Read-Only Filesystem
+if (process.env.VERCEL) {
+  const dbSource = path.join(__dirname, 'dev.db');
+  const dbDest = '/tmp/dev.db';
+  try {
+    if (fs.existsSync(dbSource) && !fs.existsSync(dbDest)) {
+      fs.copyFileSync(dbSource, dbDest);
+      console.log("Copied SQLite DB to /tmp for Vercel");
+    }
+  } catch (err) {
+    console.error("Error copying DB:", err);
+  }
+}
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.VERCEL ? 'file:/tmp/dev.db' : 'file:./dev.db'
+    }
+  }
+});
 
 // Setup middlewares
 app.use(cors({
@@ -17,7 +38,7 @@ app.use(cors({
 app.use(express.json());
 
 // Setup uploads directory
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
@@ -28,7 +49,7 @@ app.use('/uploads', express.static(uploadsDir));
 // Setup Multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+    cb(null, process.env.VERCEL ? '/tmp/uploads/' : 'uploads/');
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
