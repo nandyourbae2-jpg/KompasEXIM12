@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3001;
 
 // Fix for Vercel SQLite Read-Only Filesystem
 if (process.env.VERCEL) {
-  const dbSource = path.join(__dirname, 'dev.db');
+  const dbSource = path.join(__dirname, 'prisma', 'dev.db');
   const dbDest = '/tmp/dev.db';
   try {
     if (fs.existsSync(dbSource) && !fs.existsSync(dbDest)) {
@@ -25,7 +25,7 @@ if (process.env.VERCEL) {
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: process.env.VERCEL ? 'file:/tmp/dev.db' : 'file:./dev.db'
+      url: process.env.VERCEL ? 'file:/tmp/dev.db' : 'file:./prisma/dev.db'
     }
   }
 });
