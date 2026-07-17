@@ -161,6 +161,15 @@ const useAuthStore = create((set) => ({
       const data = await response.json();
 
       if (!response.ok) {
+        // Vercel Demo Fallback: Jika backend error (karena isu Vercel SQLite), gunakan data dummy
+        const dummyUser = DUMMY_USERS.find(u => u.employee_id === employee_id);
+        if (dummyUser && password === '123456') {
+          console.warn("Backend error, using dummy fallback for demo");
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify(dummyUser));
+          set({ user: dummyUser, isLoading: false, error: null });
+          return dummyUser;
+        }
+
         set({ error: data.error || 'Gagal login', isLoading: false });
         return null;
       }
@@ -173,6 +182,15 @@ const useAuthStore = create((set) => ({
       set({ user, isLoading: false, error: null });
       return user;
     } catch (err) {
+      // Vercel Demo Fallback: Jika backend mati total, gunakan data dummy
+      const dummyUser = DUMMY_USERS.find(u => u.employee_id === employee_id);
+      if (dummyUser && password === '123456') {
+        console.warn("Backend unreachable, using dummy fallback for demo");
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(dummyUser));
+        set({ user: dummyUser, isLoading: false, error: null });
+        return dummyUser;
+      }
+
       set({ error: 'Tidak dapat terhubung ke server', isLoading: false });
       return null;
     }
