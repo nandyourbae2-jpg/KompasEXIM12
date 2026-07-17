@@ -178,7 +178,12 @@ app.use((req, res, next) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Backend server is running on http://localhost:${PORT}`);
-});
+// Start server if not running on Vercel
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Backend server is running on http://localhost:${PORT}`);
+  });
+}
+
+// Export for Vercel Serverless Functions
+module.exports = app;
