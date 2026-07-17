@@ -1,0 +1,41 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Document {
+  id           Int      @id @default(autoincrement())
+  nama_file    String
+  file_path    String
+  tipe         String
+  no_referensi String?
+  departemen   String?
+  versi        Int      @default(1)
+  ukuran_kb    Int?
+  tags         String?  // JSON string
+  vendor_id    String?
+  status       String   @default("Aktif")
+  is_deleted   Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  upload_oleh  Int?     // User ID yang upload
+}
+
+model User {
+  id             Int      @id @default(autoincrement())
+  name           String
+  employee_id    String   @unique
+  password       String
+  departemen     String?
+  level_otoritas String
+  tipe_karyawan  String?
+  status_aktif   Boolean  @default(true)
+  created_at     DateTime @default(now())
+}
