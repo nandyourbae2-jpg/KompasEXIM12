@@ -10,16 +10,23 @@ const useDocumentStore = create((set) => ({
   filterStatus: 'Semua',
   searchQuery: '',
   
-  // FITUR BARU: Custom Document Types (disimpan di localStorage agar permanen)
+  // FITUR BARU: Custom Document Types (Tambah & Hapus)
   customDocumentTypes: JSON.parse(localStorage.getItem('customDocTypes') || '[]'),
+  
   addCustomDocumentType: (type) => set(state => {
     const newType = type.trim();
     const defaultTypes = ["Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice", "Manifest", "Lainnya"];
     
-    // Tolak jika kosong atau tipe tersebut sudah pernah ada
     if (!newType || state.customDocumentTypes.includes(newType) || defaultTypes.includes(newType)) return state;
     
     const newList = [...state.customDocumentTypes, newType];
+    localStorage.setItem('customDocTypes', JSON.stringify(newList));
+    return { customDocumentTypes: newList };
+  }),
+
+  // Fungsi baru untuk HAPUS tipe dokumen
+  removeCustomDocumentType: (typeToRemove) => set(state => {
+    const newList = state.customDocumentTypes.filter(t => t !== typeToRemove);
     localStorage.setItem('customDocTypes', JSON.stringify(newList));
     return { customDocumentTypes: newList };
   }),
