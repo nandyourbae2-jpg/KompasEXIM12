@@ -51,9 +51,9 @@ prisma.$executeRawUnsafe(`
     "upload_oleh" INTEGER
   )
 `).then(async () => {
-  // Modifikasi cerdas: Tambahkan kolom khusus untuk menyimpan isi file langsung di DB!
-  try { await prisma.$executeRawUnsafe(\`ALTER TABLE "Document" ADD COLUMN "file_data" TEXT\`); } catch(e) {}
-  try { await prisma.$executeRawUnsafe(\`ALTER TABLE "Document" ADD COLUMN "mime_type" TEXT\`); } catch(e) {}
+  // Telah diperbaiki: Menggunakan tanda kutip biasa agar tidak Crash di Vercel!
+  try { await prisma.$executeRawUnsafe('ALTER TABLE "Document" ADD COLUMN "file_data" TEXT'); } catch(e) {}
+  try { await prisma.$executeRawUnsafe('ALTER TABLE "Document" ADD COLUMN "mime_type" TEXT'); } catch(e) {}
 }).catch(e => console.error("Gagal create tabel:", e));
 
 // Memaksa update nama Manager ke Jori secara otomatis di Vercel
@@ -104,8 +104,7 @@ app.get('/api/documents', async (req, res) => {
 app.get('/api/files/:id', async (req, res) => {
   try {
     const id = Number(req.params.id);
-    // Ambil isi file rahasia dari dalam database
-    const result = await prisma.$queryRawUnsafe(`SELECT "nama_file", "file_data", "mime_type" FROM "Document" WHERE "id" = ?`, id);
+    const result = await prisma.$queryRaw`SELECT "nama_file", "file_data", "mime_type" FROM "Document" WHERE "id" = ${id}`;
     
     if (!result || result.length === 0 || !result[0].file_data) {
       return res.status(404).send('File tidak ditemukan di database.');
@@ -162,14 +161,9 @@ app.post('/api/documents', (req, res, next) => {
       data: { file_path: fileUrl }
     });
 
-    // 3. Simpan isi fisik file (di-encode Base64) KE DALAM DATABASE!
+    // 3. Simpan isi fisik file (di-encode Base64) KE DALAM DATABASE (Sangat Aman & Presisi!)
     const base64Data = file.buffer.toString('base64');
-    await prisma.$executeRawUnsafe(
-      `UPDATE "Document" SET "file_data" = ?, "mime_type" = ? WHERE "id" = ?`,
-      base64Data,
-      file.mimetype,
-      document.id
-    );
+    await prisma.$executeRaw`UPDATE "Document" SET "file_data" = ${base64Data}, "mime_type" = ${file.mimetype} WHERE "id" = ${document.id}`;
 
     const parsedDoc = {
       ...updatedDocument,
@@ -213,27 +207,4 @@ app.post('/api/login', async (req, res) => {
 });
 
 // API: Reset Simulasi
-app.get('/api/reset-simulation', async (req, res) => {
-  try {
-    await prisma.document.deleteMany({});
-    res.send('<div style="font-family: sans-serif; text-align: center; margin-top: 50px;"><h2 style="color: green;">✅ Simulasi Berhasil Di-reset!</h2><a href="/">Kembali</a></div>');
-  } catch (error) {
-    res.status(500).send("Gagal mereset simulasi: " + error.message);
-  }
-});
-
-// Serve Frontend Static Files
-const distPath = path.join(__dirname, '../dist');
-app.use(express.static(distPath));
-app.use((req, res, next) => {
-  if (req.method === 'GET' && !req.path.startsWith('/api/')) {
-    res.sendFile(path.join(distPath, 'index.html'));
-  } else {
-    next();
-  }
-});
-
-module.exports = app;
-module.exports.config = {
-  api: { bodyParser: false },
-};
+app.get('/api
