@@ -15,9 +15,8 @@ if (process.env.VERCEL) {
   try {
     if (!fs.existsSync(dbDest)) {
       fs.copyFileSync(dbSource, dbDest);
-      // PERBAIKAN: Ubah hak akses file agar bisa ditulis (Write) oleh Prisma!
-      fs.chmodSync(dbDest, 0o666); 
-      console.log("Copied SQLite DB to /tmp for Vercel with write permissions");
+      try { fs.chmodSync(dbDest, 0o666); } catch (e) {} // Mencegah crash jika gagal ubah permission
+      console.log("Copied SQLite DB to /tmp for Vercel");
     }
   } catch (err) {
     console.error("Error copying DB:", err);
@@ -27,51 +26,24 @@ if (process.env.VERCEL) {
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      // Menggunakan absolute path yang benar untuk Prisma
-      url: process.env.VERCEL ? 'file:///tmp/dev.db' : 'file:./dev.db'
+      // Kembali menggunakan format URL yang paling aman untuk Prisma di Vercel
+      url: process.env.VERCEL ? 'file:/tmp/dev.db' : 'file:./dev.db'
     }
   }
 });
 
-// Memaksa update nama Manager ke Jori secara otomatis di Vercel
-prisma.user.update({
-  where: { employee_id: 'EXIM-MGR-01' },
-  data: { name: 'Jori' }
-}).then(() => console.log("Nama Manager berhasil diupdate!"))
-  .catch((e) => console.log("Update gagal/diabaikan:", e));
-
 // Setup middlewares
 app.use(cors({
-  origin: 'http://localhost:5173', // Vite default port
+  origin: 'http://localhost:5173',
   credentials: true
 }));
 app.use(express.json());
 
-// Setup uploads directory
-const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir);
-}
-
-// Serve static files from uploads
-app.use('/uploads', express.static(uploadsDir));
-
-// Setup Multer for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, process.env.VERCEL ? '/tmp/uploads/' : 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
+// PERBAIKAN UTAMA: Gunakan memoryStorage agar aman dari isu Hak Akses Disk Vercel
+const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // Batasan 5MB
-  }
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 // API: Get all documents
@@ -87,21 +59,15 @@ app.get('/api/documents', async (req, res) => {
     }));
     res.json({ documents: parsedDocs });
   } catch (error) {
-    console.error("Error fetching documents:", error);
-    res.status(500).json({ error: 'Failed to fetch documents: ' + error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
 // API: Upload document
 app.post('/api/documents', (req, res, next) => {
   upload.single('file')(req, res, function (err) {
-    if (err instanceof multer.MulterError) {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).json({ error: 'Ukuran file maksimal adalah 5MB' });
-      }
-      return res.status(400).json({ error: err.message });
-    } else if (err) {
-      return res.status(500).json({ error: 'Terjadi kesalahan saat mengunggah file: ' + err.message });
+    if (err) {
+      return res.status(400).json({ error: 'Gagal memproses file: ' + err.message });
     }
     next();
   });
@@ -111,13 +77,16 @@ app.post('/api/documents', (req, res, next) => {
     const { tipe, no_referensi, departemen, tags, vendor_id } = req.body;
 
     if (!file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      return res.status(400).json({ error: 'Tidak ada file yang di-upload' });
     }
+
+    // Karena menggunakan memoryStorage (virtual untuk simulasi), kita buat fake URL
+    const fakeFilePath = '/uploads/sim-' + Date.now() + '-' + file.originalname.replace(/\s+/g, '_');
 
     const document = await prisma.document.create({
       data: {
         nama_file: file.originalname,
-        file_path: '/uploads/' + file.filename, 
+        file_path: fakeFilePath, 
         tipe: tipe || 'Unknown',
         no_referensi: no_referensi || null,
         departemen: departemen || 'Import',
@@ -135,9 +104,8 @@ app.post('/api/documents', (req, res, next) => {
 
     res.status(201).json({ document: parsedDoc });
   } catch (error) {
-    console.error("Error uploading document:", error);
-    // Tampilkan pesan error asli jika masih terjadi masalah agar mudah ditelusuri
-    res.status(500).json({ error: 'Database Error: ' + error.message });
+    console.error("Database Error:", error);
+    res.status(500).json({ error: 'Database gagal menyimpan: ' + error.message });
   }
 });
 
@@ -146,16 +114,13 @@ app.patch('/api/documents/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { is_deleted } = req.body;
-    
     await prisma.document.update({
       where: { id: Number(id) },
       data: { is_deleted }
     });
-    
     res.status(204).send();
   } catch (error) {
-    console.error("Error deleting document:", error);
-    res.status(500).json({ error: 'Failed to delete document' });
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -163,59 +128,22 @@ app.patch('/api/documents/:id', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { employee_id, password } = req.body;
-    
-    if (!employee_id || !password) {
-      return res.status(400).json({ error: 'Employee ID dan Password wajib diisi' });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { employee_id }
-    });
-
-    if (!user) {
-      return res.status(401).json({ error: 'Employee ID tidak ditemukan' });
-    }
-
-    if (user.password !== password) {
-      return res.status(401).json({ error: 'Kredensial tidak valid' });
-    }
-
-    if (!user.status_aktif) {
-      return res.status(403).json({ error: 'Akun ini sudah tidak aktif' });
-    }
-
+    const user = await prisma.user.findUnique({ where: { employee_id } });
+    if (!user) return res.status(401).json({ error: 'Employee ID tidak ditemukan' });
+    if (user.password !== password) return res.status(401).json({ error: 'Kredensial tidak valid' });
+    if (!user.status_aktif) return res.status(403).json({ error: 'Akun ini sudah tidak aktif' });
     const { password: _, ...userWithoutPassword } = user;
-    
     res.status(200).json({ user: userWithoutPassword });
   } catch (error) {
-    console.error("Error during login:", error);
-    res.status(500).json({ error: 'Terjadi kesalahan pada server' });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// API: Reset Simulasi (Menghapus semua dokumen & file upload)
+// API: Reset Simulasi
 app.get('/api/reset-simulation', async (req, res) => {
   try {
     await prisma.document.deleteMany({});
-    
-    const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, 'uploads');
-    
-    if (fs.existsSync(uploadsDir)) {
-      const files = fs.readdirSync(uploadsDir);
-      for (const file of files) {
-        if (file !== '.gitkeep') {
-           fs.unlinkSync(path.join(uploadsDir, file));
-        }
-      }
-    }
-    
-    res.send(`
-      <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
-        <h2 style="color: green;">✅ Simulasi Berhasil Di-reset!</h2>
-        <p>Semua data dokumen dan file upload telah dihapus dari backend.</p>
-        <a href="/login" style="padding: 10px 20px; background: blue; color: white; text-decoration: none; border-radius: 5px;">Kembali ke Halaman Login</a>
-      </div>
-    `);
+    res.send('<div style="font-family: sans-serif; text-align: center; margin-top: 50px;"><h2 style="color: green;">✅ Simulasi Berhasil Di-reset!</h2><a href="/">Kembali</a></div>');
   } catch (error) {
     res.status(500).send("Gagal mereset simulasi: " + error.message);
   }
@@ -224,24 +152,17 @@ app.get('/api/reset-simulation', async (req, res) => {
 // Serve Frontend Static Files
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
-
 app.use((req, res, next) => {
-  if (req.method === 'GET' && !req.path.startsWith('/api/') && !req.path.startsWith('/uploads/')) {
+  if (req.method === 'GET' && !req.path.startsWith('/api/')) {
     res.sendFile(path.join(distPath, 'index.html'));
   } else {
     next();
   }
 });
 
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-  app.listen(PORT, () => {
-    console.log(\`Backend server is running on http://localhost:\${PORT}\`);
-  });
-}
-
-// Export for Vercel Serverless Functions
 module.exports = app;
 
+// Menghindari Vercel menelan Multipart stream (wajib untuk multer)
 module.exports.config = {
   api: {
     bodyParser: false,
