@@ -15,7 +15,7 @@ const UploadDocumentModal = ({ onClose, initialVendorId = '', initialTags = '' }
   const [vendorId, setVendorId] = useState(initialVendorId);
   const [formError, setFormError] = useState('');
   
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!file || !reference.trim()) {
       setFormError('File dan Nomor Referensi wajib diisi');
       return;
@@ -26,17 +26,28 @@ const UploadDocumentModal = ({ onClose, initialVendorId = '', initialTags = '' }
       return;
     }
     
-    uploadDocument({
-      fileName: file.name,
-      type,
-      reference,
-      department,
-      vendorId,
-      tags: tags ? tags.split(',').map(t => t.trim()).filter(t => t !== '') : []
-    }, file, user);
+    // Tampilkan tulisan proses loading
+    setFormError('Sedang mengunggah, mohon tunggu...'); 
     
-    onClose();
+    try {
+      // Tambahkan 'await' agar sistem menunggu proses selesai
+      await uploadDocument({
+        fileName: file.name,
+        type,
+        reference,
+        department,
+        vendorId,
+        tags: tags ? tags.split(',').map(t => t.trim()).filter(t => t !== '') : []
+      }, file, user);
+      
+      // Jendela hanya tertutup jika upload SUKSES
+      onClose(); 
+    } catch (err) {
+      // Jika gagal, tampilkan pesan error dari Vercel
+      setFormError('Upload Gagal: ' + (err.message || 'Server Vercel Timeout/Error'));
+    }
   };
+
   
   return (
     <div style={{
