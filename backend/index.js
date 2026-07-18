@@ -246,3 +246,11 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
 
 // Export for Vercel Serverless Functions
 module.exports = app;
+
+// Mematikan parser bawaan Vercel agar Multer bisa menerima file upload
+module.exports.config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
