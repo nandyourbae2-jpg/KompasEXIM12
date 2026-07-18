@@ -13,9 +13,9 @@ export const dummyTasks = [
 ];
 
 export const dummyDocuments = [
-  { id: "DOC-001", fileName: "BL_Original_20240712.pdf", type: "Bill of Lading", reference: "BL-20240712", department: "Import", version: "v1", uploadedBy: "Ahmad F.", date: "10 Jul 2024", size: "1.2 MB", tags: ["Original"], status: "Tervalidasi" },
+  { id: "DOC-001", fileName: "BL_Original_20240712.pdf", type: "Bill of Lading", reference: "BL-20240712", department: "Import", version: "v2", uploadedBy: "Ahmad F.", date: "10 Jul 2024", size: "1.2 MB", tags: ["Original"], status: "Tervalidasi" },
   { id: "DOC-002", fileName: "PackingList_EX4820_Final.pdf", type: "Packing List", reference: "EX-4820", department: "Export", version: "v2", uploadedBy: "Sari R.", date: "09 Jul 2024", size: "840 KB", tags: ["Final"], status: "Tervalidasi" },
-  { id: "DOC-003", fileName: "CommInvoice_INV2024-0395.pdf", type: "Commercial Invoice", reference: "BL-20240712", department: "Account Officer", version: "v1", uploadedBy: "Rina P.", date: "10 Jul 2024", size: "620 KB", tags: ["Invoice"], status: "Tervalidasi" },
+  { id: "DOC-003", fileName: "CommInvoice_INV2024-0395.pdf", type: "Commercial Invoice", reference: "BL-20240712", department: "Account Officer", version: "v1", uploadedBy: "Jori", date: "10 Jul 2024", size: "620 KB", tags: ["Invoice"], status: "Tervalidasi" },
   { id: "DOC-004", fileName: "COO_EX4820_Garuda.pdf", type: "Certificate of Origin", reference: "EX-4820", department: "Export", version: "v1", uploadedBy: "Sari R.", date: "08 Jul 2024", size: "530 KB", tags: ["COO"], status: "Tervalidasi" },
   { id: "DOC-005", fileName: "PIB_BL20240712_Priok.pdf", type: "PIB/PEB", reference: "BL-20240712", department: "Import", version: "v1", uploadedBy: "Ahmad F.", date: "10 Jul 2024", size: "780 KB", tags: ["PIB", "Priok"], status: "Tervalidasi" },
   { id: "DOC-006", fileName: "SuratJalan_BL20240710.pdf", type: "Surat Jalan", reference: "BL-20240710", department: "Import", version: "v1", uploadedBy: "Hendra W.", date: "07 Jul 2024", size: "310 KB", tags: ["Surat Jalan"], status: "Tervalidasi" },
@@ -23,7 +23,7 @@ export const dummyDocuments = [
   { id: "DOC-008", fileName: "Jasindo_Marine_BL20240714.pdf", type: "Asuransi Kargo", reference: "BL-20240714", department: "Import", version: "v1", uploadedBy: "Budi S.", date: "06 Jul 2024", size: "920 KB", tags: ["Asuransi", "Jasindo"], status: "Menunggu Validasi" },
   { id: "DOC-009", fileName: "Quotation_Samudera_EX4825.pdf", type: "Quotation", reference: "EX-4825", department: "Administrasi Export (AE)", version: "v3", uploadedBy: "Dewi A.", date: "05 Jul 2024", size: "280 KB", tags: ["Quotation", "Samudera"], status: "Tervalidasi" },
   { id: "DOC-010", fileName: "PackingList_EX4815_v1.pdf", type: "Packing List", reference: "EX-4815", department: "Export", version: "v1", uploadedBy: "Sari R.", date: "04 Jul 2024", size: "760 KB", tags: ["Draft"], status: "Kadaluarsa" },
-  { id: "DOC-011", fileName: "Quotation_MSC_EX4828.pdf", type: "Quotation", reference: "EX-4828", department: "Administrasi Export (AE)", version: "v1", uploadedBy: "Rina P.", date: "11 Jul 2024", size: "305 KB", tags: ["Quotation", "MSC"], status: "Menunggu Validasi" },
+  { id: "DOC-011", fileName: "Quotation_MSC_EX4828.pdf", type: "Quotation", reference: "EX-4828", department: "Administrasi Export (AE)", version: "v1", uploadedBy: "Jori", date: "11 Jul 2024", size: "305 KB", tags: ["Quotation", "MSC"], status: "Menunggu Validasi" },
   { id: "DOC-012", fileName: "SuratJalan_EX4820_Trucking.pdf", type: "Surat Jalan", reference: "EX-4820", department: "Export", version: "v1", uploadedBy: "Sari R.", date: "12 Jul 2024", size: "415 KB", tags: ["Trucking"], status: "Tervalidasi" }
 ];
 
