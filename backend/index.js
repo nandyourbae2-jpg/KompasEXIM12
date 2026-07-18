@@ -32,6 +32,28 @@ const prisma = new PrismaClient({
   }
 });
 
+// Trik spesial: Memaksa pembuatan tabel Document jika belum ada
+prisma.$executeRawUnsafe(`
+  CREATE TABLE IF NOT EXISTS "Document" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "nama_file" TEXT NOT NULL,
+    "file_path" TEXT NOT NULL,
+    "tipe" TEXT NOT NULL,
+    "no_referensi" TEXT,
+    "departemen" TEXT,
+    "versi" INTEGER NOT NULL DEFAULT 1,
+    "ukuran_kb" INTEGER,
+    "tags" TEXT,
+    "vendor_id" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'Aktif',
+    "is_deleted" BOOLEAN NOT NULL DEFAULT 0,
+    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "upload_oleh" INTEGER
+  )
+`).then(() => console.log("Tabel Document dipastikan ada!"))
+  .catch(e => console.error("Gagal create tabel:", e));
+
 // Setup middlewares
 app.use(cors({
   origin: 'http://localhost:5173',
