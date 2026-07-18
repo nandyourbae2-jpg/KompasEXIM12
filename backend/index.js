@@ -8,7 +8,7 @@ const { PrismaClient } = require('@prisma/client');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Fix for Vercel SQLite Read-Only Filesystem
+// 1. Inisialisasi Database File untuk Vercel
 if (process.env.VERCEL) {
   const dbSource = path.join(__dirname, 'prisma', 'dev.db');
   const dbDest = '/tmp/dev.db';
@@ -31,8 +31,8 @@ const prisma = new PrismaClient({
   }
 });
 
-// Trik spesial: Memaksa pembuatan tabel Document beserta kolom penyimpanan file
-prisma.$executeRawUnsafe(`
+// 2. Trik Spesial & PROMISE BARRIER: Pastikan tabel selesai dibuat sebelum proses lain berjalan
+const initDbPromise = prisma.$executeRawUnsafe(`
   CREATE TABLE IF NOT EXISTS "Document" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "nama_file" TEXT NOT NULL,
@@ -51,41 +51,45 @@ prisma.$executeRawUnsafe(`
     "upload_oleh" INTEGER
   )
 `).then(async () => {
-  // Telah diperbaiki: Menggunakan tanda kutip biasa agar tidak Crash di Vercel!
   try { await prisma.$executeRawUnsafe('ALTER TABLE "Document" ADD COLUMN "file_data" TEXT'); } catch(e) {}
   try { await prisma.$executeRawUnsafe('ALTER TABLE "Document" ADD COLUMN "mime_type" TEXT'); } catch(e) {}
 }).catch(e => console.error("Gagal create tabel:", e));
 
-// Memaksa update nama Manager ke Jori secara otomatis di Vercel
+// Update Nama Manager
 prisma.user.update({
   where: { employee_id: 'EXIM-MGR-01' },
   data: { name: 'Jori' }
-}).then(() => {})
-  .catch((e) => {});
+}).then(() => {}).catch(() => {});
 
-// Setup middlewares
-app.use(cors({
-  origin: 'http://localhost:5173',
-  credentials: true
-}));
+// 3. Middlewares
+app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 
+// 4. Setup Uploads (Kembali ke diskStorage yang terbukti bekerja paling aman di Vercel!)
 const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   try { fs.mkdirSync(uploadsDir); } catch(e) {}
 }
 app.use('/uploads', express.static(uploadsDir));
 
-// Gunakan memoryStorage agar data langsung masuk ke RAM, bukan ke folder Vercel
-const storage = multer.memoryStorage();
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // Batasan 5MB
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
 // API: Get all documents
-app.get('/api/documents', async (req, res) => {
+app.get('/api/documents', async (req, res, next) => {
   try {
+    await initDbPromise; // Tahan sampai struktur tabel benar-benar siap
     const documents = await prisma.document.findMany({
       where: { is_deleted: false },
       orderBy: { created_at: 'desc' }
@@ -96,13 +100,14 @@ app.get('/api/documents', async (req, res) => {
     }));
     res.json({ documents: parsedDocs });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 });
 
 // API: Download/Preview File
-app.get('/api/files/:id', async (req, res) => {
+app.get('/api/files/:id', async (req, res, next) => {
   try {
+    await initDbPromise;
     const id = Number(req.params.id);
     const result = await prisma.$queryRaw`SELECT "nama_file", "file_data", "mime_type" FROM "Document" WHERE "id" = ${id}`;
     
@@ -118,20 +123,20 @@ app.get('/api/files/:id', async (req, res) => {
     res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
     res.send(buffer);
   } catch (error) {
-    res.status(500).send('Gagal memuat file: ' + error.message);
+    next(error);
   }
 });
 
 // API: Upload document
 app.post('/api/documents', (req, res, next) => {
   upload.single('file')(req, res, function (err) {
-    if (err) {
-      return res.status(400).json({ error: 'Gagal memproses file: ' + err.message });
-    }
+    if (err) return next(err); // Lempar error dengan rapi ke Global Handler
     next();
   });
-}, async (req, res) => {
+}, async (req, res, next) => {
   try {
+    await initDbPromise; // Mencegah Error karena kolom belum terbuat
+    
     const file = req.file;
     const { tipe, no_referensi, departemen, tags, vendor_id } = req.body;
 
@@ -139,11 +144,11 @@ app.post('/api/documents', (req, res, next) => {
       return res.status(400).json({ error: 'Tidak ada file yang di-upload' });
     }
 
-    // 1. Simpan baris dokumen ke Prisma untuk mendapatkan ID
+    // 1. Simpan baris dokumen ke Prisma
     const document = await prisma.document.create({
       data: {
         nama_file: file.originalname,
-        file_path: '', // Akan diisi di step 2
+        file_path: '', // Placeholder
         tipe: tipe || 'Unknown',
         no_referensi: no_referensi || null,
         departemen: departemen || 'Import',
@@ -154,16 +159,20 @@ app.post('/api/documents', (req, res, next) => {
       }
     });
 
-    // 2. Buat URL akses file ke sistem Download API yang baru kita buat
+    // 2. Buat URL Preview
     const fileUrl = `/api/files/${document.id}`;
     const updatedDocument = await prisma.document.update({
       where: { id: document.id },
       data: { file_path: fileUrl }
     });
 
-    // 3. Simpan isi fisik file (di-encode Base64) KE DALAM DATABASE (Sangat Aman & Presisi!)
-    const base64Data = file.buffer.toString('base64');
+    // 3. Pindahkan file dari folder Vercel /tmp ke dalam SQLite Database
+    const fileBuffer = fs.readFileSync(file.path);
+    const base64Data = fileBuffer.toString('base64');
     await prisma.$executeRaw`UPDATE "Document" SET "file_data" = ${base64Data}, "mime_type" = ${file.mimetype} WHERE "id" = ${document.id}`;
+
+    // Hapus file dari folder sementara (bersih-bersih RAM Vercel)
+    try { fs.unlinkSync(file.path); } catch(e) {}
 
     const parsedDoc = {
       ...updatedDocument,
@@ -172,12 +181,12 @@ app.post('/api/documents', (req, res, next) => {
 
     res.status(201).json({ document: parsedDoc });
   } catch (error) {
-    res.status(500).json({ error: 'Database gagal menyimpan: ' + error.message });
+    next(error); // Lempar ke Global Error Handler agar selalu berwujud JSON!
   }
 });
 
 // API: Soft Delete document
-app.patch('/api/documents/:id', async (req, res) => {
+app.patch('/api/documents/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const { is_deleted } = req.body;
@@ -187,12 +196,12 @@ app.patch('/api/documents/:id', async (req, res) => {
     });
     res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 });
 
 // API: Login
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', async (req, res, next) => {
   try {
     const { employee_id, password } = req.body;
     const user = await prisma.user.findUnique({ where: { employee_id } });
@@ -202,9 +211,42 @@ app.post('/api/login', async (req, res) => {
     const { password: _, ...userWithoutPassword } = user;
     res.status(200).json({ user: userWithoutPassword });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 });
 
 // API: Reset Simulasi
-app.get('/api
+app.get('/api/reset-simulation', async (req, res, next) => {
+  try {
+    await initDbPromise;
+    await prisma.document.deleteMany({});
+    res.send('<div style="font-family: sans-serif; text-align: center; margin-top: 50px;"><h2 style="color: green;">✅ Simulasi Berhasil Di-reset!</h2><a href="/">Kembali</a></div>');
+  } catch (error) {
+    res.status(500).send("Gagal mereset simulasi: " + error.message);
+  }
+});
+
+// Serve Frontend Static Files
+const distPath = path.join(__dirname, '../dist');
+app.use(express.static(distPath));
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api/')) {
+    res.sendFile(path.join(distPath, 'index.html'));
+  } else {
+    next();
+  }
+});
+
+// 5. GLOBAL ERROR HANDLER (Mencegah HTML 500 Vercel dan mengubahnya jadi pesan error nyata)
+app.use((err, req, res, next) => {
+  console.error("Global Error:", err);
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({ error: 'Multer Error: ' + err.message });
+  }
+  res.status(500).json({ error: 'System Error: ' + (err.message || String(err)) });
+});
+
+module.exports = app;
+module.exports.config = {
+  api: { bodyParser: false },
+};
