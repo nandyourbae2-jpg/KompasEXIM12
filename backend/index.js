@@ -30,6 +30,13 @@ const prisma = new PrismaClient({
   }
 });
 
+// Memaksa update nama Manager ke Jori secara otomatis di Vercel
+prisma.user.update({
+  where: { employee_id: 'EXIM-MGR-01' },
+  data: { name: 'Jori' }
+}).then(() => console.log("Nama Manager berhasil diupdate!"))
+  .catch((e) => console.log("Update gagal/diabaikan:", e));
+
 // Setup middlewares
 app.use(cors({
   origin: 'http://localhost:5173', // Vite default port
