@@ -8,7 +8,7 @@ const DocumentSidebar = () => {
   const { 
     documents, filterType, filterDepartment, filterStatus, 
     setFilterType, setFilterDepartment, setFilterStatus,
-    customDocumentTypes, addCustomDocumentType
+    customDocumentTypes, addCustomDocumentType, removeCustomDocumentType
   } = useDocumentStore();
   
   const [isAdding, setIsAdding] = useState(false);
@@ -33,7 +33,6 @@ const DocumentSidebar = () => {
 
   const defaultTypes = ["Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice", "Manifest", "Lainnya"];
   
-  // Menggabungkan tipe default dan custom dari UI
   const types = ["Semua", ...defaultTypes, ...customDocumentTypes];
   
   const depts = ["Semua", "Import", "Export", "Administrasi Export (AE)", "Account Officer"];
@@ -55,6 +54,8 @@ const DocumentSidebar = () => {
           {types.map(t => {
             const count = getTypeCount(t);
             const isActive = filterType === t;
+            const isCustom = customDocumentTypes.includes(t); // Deteksi apakah ini dokumen custom
+            
             return (
               <div 
                 key={t}
@@ -67,16 +68,38 @@ const DocumentSidebar = () => {
                 }}
               >
                 <span style={{ fontSize: '15px', fontWeight: isActive ? '600' : '400' }}>{t}</span>
-                <span style={{ 
-                  fontSize: '12px', 
-                  backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'var(--color-surface-chip-translucent)',
-                  padding: '2px 8px', borderRadius: '10px'
-                }}>{count}</span>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ 
+                    fontSize: '12px', 
+                    backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'var(--color-surface-chip-translucent)',
+                    padding: '2px 8px', borderRadius: '10px'
+                  }}>{count}</span>
+                  
+                  {/* Tanda Silang Khusus Untuk Tipe Custom */}
+                  {isCustom && (
+                    <span 
+                      onClick={(e) => {
+                        e.stopPropagation(); // Mencegah filter aktif terpencet
+                        if (window.confirm(`Hapus tipe dokumen "${t}" secara permanen?`)) {
+                          removeCustomDocumentType(t);
+                          if (filterType === t) setFilterType('Semua'); // Kembalikan view ke Semua
+                        }
+                      }}
+                      style={{ 
+                        fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', padding: '0 4px',
+                        color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--color-ink-muted-48)',
+                      }}
+                      title="Hapus tipe dokumen ini"
+                    >
+                      ×
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}
           
-          {/* FITUR TAMBAH TIPE DOKUMEN DARI UI */}
           {isAdding ? (
             <div style={{ marginTop: '4px' }}>
               <input 
