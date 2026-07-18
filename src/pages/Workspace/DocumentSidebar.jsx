@@ -1,13 +1,19 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import useDocumentStore from '../../store/useDocumentStore';
 import useAuthStore from '../../store/useAuthStore';
 import { canViewAcrossDept } from '../../utils/authHelpers';
-import { useEffect } from 'react';
 
 const DocumentSidebar = () => {
   const { user } = useAuthStore();
-  const { documents, filterType, filterDepartment, filterStatus, setFilterType, setFilterDepartment, setFilterStatus } = useDocumentStore();
+  const { 
+    documents, filterType, filterDepartment, filterStatus, 
+    setFilterType, setFilterDepartment, setFilterStatus,
+    customDocumentTypes, addCustomDocumentType
+  } = useDocumentStore();
   
+  const [isAdding, setIsAdding] = useState(false);
+  const [newType, setNewType] = useState('');
+
   useEffect(() => {
     if (user && user.departemen && !canViewAcrossDept(user)) {
       setFilterDepartment(user.departemen);
@@ -22,14 +28,24 @@ const DocumentSidebar = () => {
 
   const getTypeCount = (typeName) => {
     if (typeName === 'Semua') return docsForTypeCount.length;
-    return docsForTypeCount.filter(d => d.type === typeName).length;
+    return docsForTypeCount.filter(d => (d.type || d.tipe) === typeName).length;
   };
 
-  // TIPE DOKUMEN BARU DITAMBAHKAN PADA ARRAY DI BAWAH INI
-  const types = ["Semua", "Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice", "Manifest", "Lainnya"];
+  const defaultTypes = ["Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice", "Manifest", "Lainnya"];
+  
+  // Menggabungkan tipe default dan custom dari UI
+  const types = ["Semua", ...defaultTypes, ...customDocumentTypes];
   
   const depts = ["Semua", "Import", "Export", "Administrasi Export (AE)", "Account Officer"];
   const statuses = ["Semua", "Tervalidasi", "Menunggu Validasi", "Kadaluarsa"];
+
+  const handleAddNewType = () => {
+    if (newType.trim()) {
+      addCustomDocumentType(newType);
+    }
+    setNewType('');
+    setIsAdding(false);
+  };
 
   return (
     <div style={{ width: '280px', minWidth: '280px', padding: '24px', borderRight: '1px solid var(--color-hairline)', backgroundColor: 'var(--color-canvas-parchment)', overflowY: 'auto' }}>
@@ -59,6 +75,33 @@ const DocumentSidebar = () => {
               </div>
             );
           })}
+          
+          {/* FITUR TAMBAH TIPE DOKUMEN DARI UI */}
+          {isAdding ? (
+            <div style={{ marginTop: '4px' }}>
+              <input 
+                type="text" 
+                autoFocus
+                value={newType}
+                onChange={e => setNewType(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddNewType()}
+                onBlur={handleAddNewType}
+                placeholder="Nama tipe baru..."
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--rounded-sm)', border: '1px solid var(--color-primary)', fontSize: '14px', outline: 'none' }}
+              />
+            </div>
+          ) : (
+            <div 
+              onClick={() => setIsAdding(true)}
+              style={{ 
+                marginTop: '8px', cursor: 'pointer', color: 'var(--color-primary)', 
+                fontSize: '14px', fontWeight: '600', padding: '8px 12px',
+                display: 'flex', alignItems: 'center', gap: '6px'
+              }}
+            >
+              <span>+ Tambah Tipe Baru</span>
+            </div>
+          )}
         </div>
       </div>
 
