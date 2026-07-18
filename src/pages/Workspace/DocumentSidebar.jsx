@@ -31,9 +31,9 @@ const DocumentSidebar = () => {
     return docsForTypeCount.filter(d => (d.type || d.tipe) === typeName).length;
   };
 
-  const defaultTypes = ["Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice", "Manifest", "Lainnya"];
-  
-  const types = ["Semua", ...defaultTypes, ...customDocumentTypes];
+  // Kini semua tipe dokumen diambil murni dari state (yang bisa diedit/dihapus total)
+  // "Semua" diikat di atas, "Lainnya" diikat di bawah.
+  const types = ["Semua", ...customDocumentTypes, "Lainnya"];
   
   const depts = ["Semua", "Import", "Export", "Administrasi Export (AE)", "Account Officer"];
   const statuses = ["Semua", "Tervalidasi", "Menunggu Validasi", "Kadaluarsa"];
@@ -54,7 +54,8 @@ const DocumentSidebar = () => {
           {types.map(t => {
             const count = getTypeCount(t);
             const isActive = filterType === t;
-            const isCustom = customDocumentTypes.includes(t); // Deteksi apakah ini dokumen custom
+            // Semua bisa dihapus kecuali "Semua" dan "Lainnya"
+            const isDeletable = t !== 'Semua' && t !== 'Lainnya'; 
             
             return (
               <div 
@@ -76,19 +77,20 @@ const DocumentSidebar = () => {
                     padding: '2px 8px', borderRadius: '10px'
                   }}>{count}</span>
                   
-                  {/* Tanda Silang Khusus Untuk Tipe Custom */}
-                  {isCustom && (
+                  {/* TOMBOL HAPUS UNIVERSAL */}
+                  {isDeletable && (
                     <span 
                       onClick={(e) => {
-                        e.stopPropagation(); // Mencegah filter aktif terpencet
+                        e.stopPropagation();
                         if (window.confirm(`Hapus tipe dokumen "${t}" secara permanen?`)) {
                           removeCustomDocumentType(t);
-                          if (filterType === t) setFilterType('Semua'); // Kembalikan view ke Semua
+                          if (filterType === t) setFilterType('Semua');
                         }
                       }}
                       style={{ 
-                        fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', padding: '0 4px',
-                        color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--color-ink-muted-48)',
+                        fontSize: '18px', lineHeight: '1', fontWeight: 'bold', cursor: 'pointer', 
+                        padding: '0 4px', marginLeft: '4px',
+                        color: isActive ? 'rgba(255,255,255,0.9)' : '#ff3b30'
                       }}
                       title="Hapus tipe dokumen ini"
                     >
