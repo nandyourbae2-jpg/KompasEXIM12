@@ -14,8 +14,7 @@ const DocumentSidebar = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [newType, setNewType] = useState('');
   
-  // STATE BARU: Untuk melacak kursor (hover) dan mengatur pop-up
-  const [hoveredType, setHoveredType] = useState(null);
+  // State khusus untuk memunculkan Visual Pop-up UI kustom (bukan peringatan bawaan website)
   const [typeToDelete, setTypeToDelete] = useState(null);
 
   useEffect(() => {
@@ -48,11 +47,11 @@ const DocumentSidebar = () => {
     setIsAdding(false);
   };
 
-  // Eksekusi hapus yang dipanggil dari Pop-up
+  // Eksekusi fungsi hapus dari pop-up UI
   const confirmDelete = () => {
     if (typeToDelete) {
       removeCustomDocumentType(typeToDelete);
-      if (filterType === typeToDelete) setFilterType('Semua');
+      if (filterType === typeToDelete) setFilterType('Semua'); // Kembalikan ke "Semua" jika yang dihapus sedang aktif
       setTypeToDelete(null); // Tutup pop-up
     }
   };
@@ -72,8 +71,6 @@ const DocumentSidebar = () => {
                 <div 
                   key={t}
                   onClick={() => setFilterType(t)}
-                  onMouseEnter={() => setHoveredType(t)} // Kursor masuk
-                  onMouseLeave={() => setHoveredType(null)} // Kursor keluar
                   style={{ 
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
                     padding: '8px 12px', borderRadius: 'var(--rounded-sm)', cursor: 'pointer',
@@ -90,17 +87,17 @@ const DocumentSidebar = () => {
                       padding: '2px 8px', borderRadius: '10px'
                     }}>{count}</span>
                     
-                    {/* TOMBOL HAPUS (Hanya Muncul Jika isDeletable DAN Kursor Sedang Hover) */}
-                    {isDeletable && hoveredType === t && (
+                    {/* TANDA SILANG HANYA MUNCUL KETIKA DOKUMEN SEDANG DIPILIH / AKTIF (isActive) */}
+                    {isDeletable && isActive && (
                       <span 
                         onClick={(e) => {
                           e.stopPropagation();
-                          setTypeToDelete(t); // Tampilkan Pop-up
+                          setTypeToDelete(t); // Memicu Visual Pop-up
                         }}
                         style={{ 
                           fontSize: '18px', lineHeight: '1', fontWeight: 'bold', cursor: 'pointer', 
                           padding: '0 4px', marginLeft: '4px',
-                          color: isActive ? 'rgba(255,255,255,0.9)' : '#ff3b30'
+                          color: 'rgba(255,255,255,0.9)' // Warna putih transparan karena tombol biru sedang menyala
                         }}
                         title="Hapus tipe dokumen ini"
                       >
@@ -121,7 +118,7 @@ const DocumentSidebar = () => {
                   onChange={e => setNewType(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddNewType()}
                   onBlur={handleAddNewType}
-                  placeholder="Nama tipe baru..."
+                  placeholder="Ketik lalu Enter..."
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--rounded-sm)', border: '1px solid var(--color-primary)', fontSize: '14px', outline: 'none' }}
                 />
               </div>
@@ -164,7 +161,7 @@ const DocumentSidebar = () => {
         </div>
       </div>
 
-      {/* POP-UP KONFIRMASI (Visual Clean UI ala Apple) */}
+      {/* VISUAL POP-UP UI APPLE KUSTOM (MENGGANTIKAN PERINGATAN WEBSITE) */}
       {typeToDelete && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -176,7 +173,7 @@ const DocumentSidebar = () => {
           }}>
             <h2 style={{ fontSize: '17px', fontWeight: '600', color: 'var(--color-ink)', margin: 0 }}>Hapus Tipe Dokumen?</h2>
             <p style={{ fontSize: '14px', color: 'var(--color-ink-muted-80)', margin: 0, lineHeight: '1.4' }}>
-              Apakah Anda yakin ingin menghapus <strong>"{typeToDelete}"</strong>?
+              Apakah Anda yakin ingin menghapus tipe dokumen <strong>"{typeToDelete}"</strong>?
             </p>
             
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
