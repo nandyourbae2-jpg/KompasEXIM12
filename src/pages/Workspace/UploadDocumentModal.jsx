@@ -15,7 +15,7 @@ const UploadDocumentModal = ({ onClose, initialVendorId = '', initialTags = '' }
   const [vendorId, setVendorId] = useState(initialVendorId);
   const [formError, setFormError] = useState('');
   
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!file || !reference.trim()) {
       setFormError('File dan Nomor Referensi wajib diisi');
       return;
@@ -26,28 +26,17 @@ const UploadDocumentModal = ({ onClose, initialVendorId = '', initialTags = '' }
       return;
     }
     
-    // Tampilkan tulisan proses loading
-    setFormError('Sedang mengunggah, mohon tunggu...'); 
+    uploadDocument({
+      fileName: file.name,
+      type,
+      reference,
+      department,
+      vendorId,
+      tags: tags ? tags.split(',').map(t => t.trim()).filter(t => t !== '') : []
+    }, file, user);
     
-    try {
-      // Tambahkan 'await' agar sistem menunggu proses selesai
-      await uploadDocument({
-        fileName: file.name,
-        type,
-        reference,
-        department,
-        vendorId,
-        tags: tags ? tags.split(',').map(t => t.trim()).filter(t => t !== '') : []
-      }, file, user);
-      
-      // Jendela hanya tertutup jika upload SUKSES
-      onClose(); 
-    } catch (err) {
-      // Jika gagal, tampilkan pesan error dari Vercel
-      setFormError('Upload Gagal: ' + (err.message || 'Server Vercel Timeout/Error'));
-    }
+    onClose();
   };
-
   
   return (
     <div style={{
@@ -84,6 +73,9 @@ const UploadDocumentModal = ({ onClose, initialVendorId = '', initialTags = '' }
             <option value="Dolphin Safe Certificate">Dolphin Safe Certificate</option>
             <option value="Certificate Of Analysis">Certificate Of Analysis</option>
             <option value="Prior Notice">Prior Notice</option>
+            {/* TIPE DOKUMEN BARU DITAMBAHKAN DI SINI */}
+            <option value="Manifest">Manifest</option>
+            <option value="Lainnya">Lainnya</option>
           </select>
         </div>
         
