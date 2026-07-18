@@ -25,7 +25,9 @@ const DocumentSidebar = () => {
     return docsForTypeCount.filter(d => d.type === typeName).length;
   };
 
-  const types = ["Semua", "Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice"];
+  // TIPE DOKUMEN BARU DITAMBAHKAN PADA ARRAY DI BAWAH INI
+  const types = ["Semua", "Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice", "Manifest", "Lainnya"];
+  
   const depts = ["Semua", "Import", "Export", "Administrasi Export (AE)", "Account Officer"];
   const statuses = ["Semua", "Tervalidasi", "Menunggu Validasi", "Kadaluarsa"];
 
