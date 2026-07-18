@@ -15,7 +15,7 @@ if (process.env.VERCEL) {
   try {
     if (!fs.existsSync(dbDest)) {
       fs.copyFileSync(dbSource, dbDest);
-      try { fs.chmodSync(dbDest, 0o666); } catch (e) {} // Mencegah crash jika gagal ubah permission
+      try { fs.chmodSync(dbDest, 0o666); } catch (e) {}
       console.log("Copied SQLite DB to /tmp for Vercel");
     }
   } catch (err) {
@@ -26,13 +26,12 @@ if (process.env.VERCEL) {
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      // Kembali menggunakan format URL yang paling aman untuk Prisma di Vercel
       url: process.env.VERCEL ? 'file:/tmp/dev.db' : 'file:./dev.db'
     }
   }
 });
 
-// Trik spesial: Memaksa pembuatan tabel Document jika belum ada
+// Trik spesial: Memaksa pembuatan tabel Document beserta kolom penyimpanan file
 prisma.$executeRawUnsafe(`
   CREATE TABLE IF NOT EXISTS "Document" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -51,8 +50,18 @@ prisma.$executeRawUnsafe(`
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "upload_oleh" INTEGER
   )
-`).then(() => console.log("Tabel Document dipastikan ada!"))
-  .catch(e => console.error("Gagal create tabel:", e));
+`).then(async () => {
+  // Modifikasi cerdas: Tambahkan kolom khusus untuk menyimpan isi file langsung di DB!
+  try { await prisma.$executeRawUnsafe(\`ALTER TABLE "Document" ADD COLUMN "file_data" TEXT\`); } catch(e) {}
+  try { await prisma.$executeRawUnsafe(\`ALTER TABLE "Document" ADD COLUMN "mime_type" TEXT\`); } catch(e) {}
+}).catch(e => console.error("Gagal create tabel:", e));
+
+// Memaksa update nama Manager ke Jori secara otomatis di Vercel
+prisma.user.update({
+  where: { employee_id: 'EXIM-MGR-01' },
+  data: { name: 'Jori' }
+}).then(() => {})
+  .catch((e) => {});
 
 // Setup middlewares
 app.use(cors({
@@ -61,11 +70,17 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// PERBAIKAN UTAMA: Gunakan memoryStorage agar aman dari isu Hak Akses Disk Vercel
+const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  try { fs.mkdirSync(uploadsDir); } catch(e) {}
+}
+app.use('/uploads', express.static(uploadsDir));
+
+// Gunakan memoryStorage agar data langsung masuk ke RAM, bukan ke folder Vercel
 const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }
+  limits: { fileSize: 5 * 1024 * 1024 } // Batasan 5MB
 });
 
 // API: Get all documents
@@ -82,6 +97,29 @@ app.get('/api/documents', async (req, res) => {
     res.json({ documents: parsedDocs });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Download/Preview File
+app.get('/api/files/:id', async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    // Ambil isi file rahasia dari dalam database
+    const result = await prisma.$queryRawUnsafe(`SELECT "nama_file", "file_data", "mime_type" FROM "Document" WHERE "id" = ?`, id);
+    
+    if (!result || result.length === 0 || !result[0].file_data) {
+      return res.status(404).send('File tidak ditemukan di database.');
+    }
+
+    const doc = result[0];
+    const buffer = Buffer.from(doc.file_data, 'base64');
+    const safeName = doc.nama_file.replace(/[^\x20-\x7E]/g, '');
+
+    res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"`);
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).send('Gagal memuat file: ' + error.message);
   }
 });
 
@@ -102,13 +140,11 @@ app.post('/api/documents', (req, res, next) => {
       return res.status(400).json({ error: 'Tidak ada file yang di-upload' });
     }
 
-    // Karena menggunakan memoryStorage (virtual untuk simulasi), kita buat fake URL
-    const fakeFilePath = '/uploads/sim-' + Date.now() + '-' + file.originalname.replace(/\s+/g, '_');
-
+    // 1. Simpan baris dokumen ke Prisma untuk mendapatkan ID
     const document = await prisma.document.create({
       data: {
         nama_file: file.originalname,
-        file_path: fakeFilePath, 
+        file_path: '', // Akan diisi di step 2
         tipe: tipe || 'Unknown',
         no_referensi: no_referensi || null,
         departemen: departemen || 'Import',
@@ -119,14 +155,29 @@ app.post('/api/documents', (req, res, next) => {
       }
     });
 
+    // 2. Buat URL akses file ke sistem Download API yang baru kita buat
+    const fileUrl = `/api/files/${document.id}`;
+    const updatedDocument = await prisma.document.update({
+      where: { id: document.id },
+      data: { file_path: fileUrl }
+    });
+
+    // 3. Simpan isi fisik file (di-encode Base64) KE DALAM DATABASE!
+    const base64Data = file.buffer.toString('base64');
+    await prisma.$executeRawUnsafe(
+      `UPDATE "Document" SET "file_data" = ?, "mime_type" = ? WHERE "id" = ?`,
+      base64Data,
+      file.mimetype,
+      document.id
+    );
+
     const parsedDoc = {
-      ...document,
-      tags: JSON.parse(document.tags)
+      ...updatedDocument,
+      tags: JSON.parse(updatedDocument.tags)
     };
 
     res.status(201).json({ document: parsedDoc });
   } catch (error) {
-    console.error("Database Error:", error);
     res.status(500).json({ error: 'Database gagal menyimpan: ' + error.message });
   }
 });
@@ -183,10 +234,6 @@ app.use((req, res, next) => {
 });
 
 module.exports = app;
-
-// Menghindari Vercel menelan Multipart stream (wajib untuk multer)
 module.exports.config = {
-  api: {
-    bodyParser: false,
-  },
+  api: { bodyParser: false },
 };
