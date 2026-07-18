@@ -4,7 +4,7 @@ import useAuthStore from '../../store/useAuthStore';
 import Button from '../../components/Button';
 
 const UploadDocumentModal = ({ onClose, initialVendorId = '', initialTags = '' }) => {
-  const { uploadDocument } = useDocumentStore();
+  const { uploadDocument, customDocumentTypes } = useDocumentStore();
   const { user } = useAuthStore();
   
   const [file, setFile] = useState(null);
@@ -73,9 +73,13 @@ const UploadDocumentModal = ({ onClose, initialVendorId = '', initialTags = '' }
             <option value="Dolphin Safe Certificate">Dolphin Safe Certificate</option>
             <option value="Certificate Of Analysis">Certificate Of Analysis</option>
             <option value="Prior Notice">Prior Notice</option>
-            {/* TIPE DOKUMEN BARU DITAMBAHKAN DI SINI */}
             <option value="Manifest">Manifest</option>
             <option value="Lainnya">Lainnya</option>
+            
+            {/* OPSI DINAMIS DARI HASIL INPUT USER DI UI */}
+            {customDocumentTypes.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
           </select>
         </div>
         
