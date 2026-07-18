@@ -120,8 +120,8 @@ const DUMMY_USERS = [
   // ── Manager (lintas semua departemen) ─────────────────────────────────────
   {
     id: 11,
-    name: 'Rina P.',
-    tipe_karyawan: 'Karyawan Tetap',
+    name: 'Jori',
+    tipe_karyawan: 'Karyawan Tetap',,
     status_aktif: true,
     employee_id: 'EXIM-MGR-01',
     departemen: null,
