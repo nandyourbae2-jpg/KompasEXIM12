@@ -191,6 +191,37 @@ app.post('/api/login', async (req, res) => {
     res.status(500).json({ error: 'Terjadi kesalahan pada server' });
   }
 });
+// API: Reset Simulasi (Menghapus semua dokumen & file upload)
+app.get('/api/reset-simulation', async (req, res) => {
+  try {
+    // 1. Hapus semua data dari tabel Document
+    await prisma.document.deleteMany({});
+    
+    // 2. Hapus file fisik yang pernah di-upload di folder sementara Vercel
+    const fs = require('fs');
+    const path = require('path');
+    const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, 'uploads');
+    
+    if (fs.existsSync(uploadsDir)) {
+      const files = fs.readdirSync(uploadsDir);
+      for (const file of files) {
+        if (file !== '.gitkeep') {
+           fs.unlinkSync(path.join(uploadsDir, file));
+        }
+      }
+    }
+    
+    res.send(`
+      <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+        <h2 style="color: green;">✅ Simulasi Berhasil Di-reset!</h2>
+        <p>Semua data dokumen dan file upload telah dihapus dari backend.</p>
+        <a href="/login" style="padding: 10px 20px; background: blue; color: white; text-decoration: none; border-radius: 5px;">Kembali ke Halaman Login</a>
+      </div>
+    `);
+  } catch (error) {
+    res.status(500).send("Gagal mereset simulasi: " + error.message);
+  }
+});
 
 // Serve Frontend Static Files
 const distPath = path.join(__dirname, '../dist');
