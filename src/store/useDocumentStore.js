@@ -1,6 +1,25 @@
 import { create } from 'zustand';
 import api from '../lib/api';
 
+const INITIAL_TYPES = ["Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice", "Manifest"];
+
+const getInitialTypes = () => {
+  const stored = localStorage.getItem('customDocTypes');
+  if (stored) {
+    const parsed = JSON.parse(stored);
+    // Migrasi pintar: Jika data lama hanya berisi dokumen tambahan, gabungkan dengan yang bawaan
+    if (!parsed.includes("Invoice") && parsed.length > 0) {
+      const merged = [...INITIAL_TYPES, ...parsed];
+      localStorage.setItem('customDocTypes', JSON.stringify(merged));
+      return merged;
+    }
+    return parsed;
+  }
+  // Jika baru pertama kali dibuka, berikan daftar bawaan
+  localStorage.setItem('customDocTypes', JSON.stringify(INITIAL_TYPES));
+  return INITIAL_TYPES;
+};
+
 const useDocumentStore = create((set) => ({
   documents: [],
   isLoading: false,
@@ -10,21 +29,20 @@ const useDocumentStore = create((set) => ({
   filterStatus: 'Semua',
   searchQuery: '',
   
-  // FITUR BARU: Custom Document Types (Tambah & Hapus)
-  customDocumentTypes: JSON.parse(localStorage.getItem('customDocTypes') || '[]'),
+  // Semua tipe dokumen kini dikelola sepenuhnya secara dinamis
+  customDocumentTypes: getInitialTypes(),
   
   addCustomDocumentType: (type) => set(state => {
     const newType = type.trim();
-    const defaultTypes = ["Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice", "Manifest", "Lainnya"];
     
-    if (!newType || state.customDocumentTypes.includes(newType) || defaultTypes.includes(newType)) return state;
+    // Tolak jika kosong, sudah ada, atau menggunakan kata kunci sistem
+    if (!newType || state.customDocumentTypes.includes(newType) || newType === 'Semua' || newType === 'Lainnya') return state;
     
     const newList = [...state.customDocumentTypes, newType];
     localStorage.setItem('customDocTypes', JSON.stringify(newList));
     return { customDocumentTypes: newList };
   }),
 
-  // Fungsi baru untuk HAPUS tipe dokumen
   removeCustomDocumentType: (typeToRemove) => set(state => {
     const newList = state.customDocumentTypes.filter(t => t !== typeToRemove);
     localStorage.setItem('customDocTypes', JSON.stringify(newList));
