@@ -9,15 +9,26 @@ const useDocumentStore = create((set) => ({
   filterDepartment: 'Semua',
   filterStatus: 'Semua',
   searchQuery: '',
+  
+  // FITUR BARU: Custom Document Types (disimpan di localStorage agar permanen)
+  customDocumentTypes: JSON.parse(localStorage.getItem('customDocTypes') || '[]'),
+  addCustomDocumentType: (type) => set(state => {
+    const newType = type.trim();
+    const defaultTypes = ["Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice", "Manifest", "Lainnya"];
+    
+    // Tolak jika kosong atau tipe tersebut sudah pernah ada
+    if (!newType || state.customDocumentTypes.includes(newType) || defaultTypes.includes(newType)) return state;
+    
+    const newList = [...state.customDocumentTypes, newType];
+    localStorage.setItem('customDocTypes', JSON.stringify(newList));
+    return { customDocumentTypes: newList };
+  }),
 
   setFilterType: (type) => set({ filterType: type }),
   setFilterDepartment: (dept) => set({ filterDepartment: dept }),
   setFilterStatus: (status) => set({ filterStatus: status }),
   setSearchQuery: (query) => set({ searchQuery: query }),
 
-  /**
-   * fetchDocuments: Ambil semua dokumen dari backend.
-   */
   fetchDocuments: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -29,10 +40,6 @@ const useDocumentStore = create((set) => ({
     }
   },
 
-  /**
-   * uploadDocument: Upload dokumen via POST /api/documents (multipart/form-data).
-   * Gunakan FormData untuk menyertakan file fisik.
-   */
   uploadDocument: async (docData, file, currentUser) => {
     const formData = new FormData();
     if (file) formData.append('file', file);
@@ -47,7 +54,6 @@ const useDocumentStore = create((set) => ({
       const data = await api('/documents', {
         method: 'POST',
         body: formData,
-        // JANGAN set Content-Type — biarkan browser set boundary multipart secara otomatis
       });
       const doc = normDoc({ ...data.document, uploadedById: currentUser?.id });
       set(state => ({ documents: [doc, ...state.documents] }));
@@ -58,17 +64,11 @@ const useDocumentStore = create((set) => ({
     }
   },
 
-  /**
-   * deleteDocument: Soft delete via PATCH /api/documents/:id
-   * Dokumen tidak benar-benar dihapus dari DB — hanya is_deleted = true.
-   */
   deleteDocument: async (docId) => {
-    // Temukan dbId dari dokumen
     const allDocs = useDocumentStore.getState().documents;
     const doc = allDocs.find(d => d.id === docId);
     if (!doc) return;
 
-    // Optimistic update
     set(state => ({
       documents: state.documents.map(d => d.id === docId ? { ...d, isDeleted: true } : d)
     }));
@@ -79,7 +79,6 @@ const useDocumentStore = create((set) => ({
         body: JSON.stringify({ is_deleted: true }),
       });
     } catch (err) {
-      // Rollback
       set(state => ({
         documents: state.documents.map(d => d.id === docId ? { ...d, isDeleted: false } : d),
         error: err.message
@@ -88,9 +87,6 @@ const useDocumentStore = create((set) => ({
   },
 }));
 
-/**
- * normDoc: Normalisasi shape document dari backend ke format yang dipakai UI.
- */
 const normDoc = (d) => ({
   id: d.id,
   dbId: d.id,
