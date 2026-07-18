@@ -2,36 +2,7 @@ import { create } from 'zustand';
 
 // Tipe: 'Weekday Report', 'Problem Report', 'Progress Update', 'Solve Update'
 
-const initialReports = [
-  {
-    id: 'RPT-001',
-    tipe: 'Weekday Report',
-    judul: 'Laporan Harian Operasional Import',
-    isi: 'Seluruh kegiatan operasional berjalan lancar, tidak ada isu demurrage yang mendesak hari ini.',
-    departemen: 'Import',
-    dibuatOlehId: 1,
-    tanggal: new Date(Date.now() - 2 * 86400000).toISOString(),
-    problem_report_id: null,
-    tanggapan_manager: null,
-    ditanggapi_oleh: null,
-    tanggapan_pada: null,
-    ditinjau_manager: false,
-  },
-  {
-    id: 'RPT-002',
-    tipe: 'Problem Report',
-    judul: 'Keterlambatan DO dari Samudera',
-    isi: 'Pengambilan DO terhambat karena sistem vendor sedang down. Potensi delay clearance 1 hari.',
-    departemen: 'Import',
-    dibuatOlehId: 1,
-    tanggal: new Date(Date.now() - 1 * 86400000).toISOString(),
-    problem_report_id: null,
-    tanggapan_manager: null,
-    ditanggapi_oleh: null,
-    tanggapan_pada: null,
-    ditinjau_manager: false,
-  }
-];
+const initialReports = [];
 
 const useReportStore = create((set, get) => ({
   reports: initialReports,
