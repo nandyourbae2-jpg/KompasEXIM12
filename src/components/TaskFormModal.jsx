@@ -26,7 +26,7 @@ const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultA
         setNewTaskAssignee(user.id);
       } else if (user.level_otoritas === 'Supervisor') {
         setNewTaskDepartment(user.departemen);
-        setNewTaskAssignee(isPersonal ? user.id : (defaultAssignee || user.id));
+        setNewTaskAssignee(isPersonal ? user.id : (defaultAssignee || ''));
       } else if (user.level_otoritas === 'Manager') {
         setNewTaskDepartment(defaultDepartment);
         setNewTaskAssignee(defaultAssignee);
@@ -74,7 +74,9 @@ const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultA
       setFormError('Judul Tugas wajib diisi');
       return;
     }
-    if (!newTaskAssignee && !isStaff) {
+    const finalAssignee = newTaskAssignee || (isPersonal ? user.id : '');
+    
+    if (!finalAssignee && !isStaff) {
       setFormError('Assignee wajib dipilih');
       return;
     }
@@ -82,7 +84,7 @@ const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultA
 
     let finalDepartment = user.departemen;
     if (isManager) {
-      const selectedSpv = assigneeOptions.find(s => s.id === Number(newTaskAssignee));
+      const selectedSpv = assigneeOptions.find(s => s.id === Number(finalAssignee));
       finalDepartment = selectedSpv ? selectedSpv.departemen : 'Import';
     }
 
@@ -90,7 +92,7 @@ const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultA
       title: newTaskTitle,
       department: finalDepartment,
       priority: newTaskPriority,
-      assigneeId: Number(newTaskAssignee) || user.id,
+      assigneeId: Number(finalAssignee) || user.id,
       dueDate: newTaskDueDate || null,
       importProjectId: null,
       shipment_un: newTaskShipmentUn || null,

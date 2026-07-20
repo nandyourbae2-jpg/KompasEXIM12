@@ -9,15 +9,65 @@ const useDocumentStore = create((set) => ({
   filterDepartment: 'Semua',
   filterStatus: 'Semua',
   searchQuery: '',
+  
+  customDocumentTypes: [],
+  
+  fetchCustomDocumentTypes: async () => {
+    try {
+      const data = await api('/document-types');
+      if (data && data.documentTypes) {
+        set({ customDocumentTypes: data.documentTypes });
+      }
+    } catch (err) {
+      console.error("Failed to fetch document types:", err);
+    }
+  },
+  
+  addCustomDocumentType: async (type) => {
+    const newType = type.trim();
+    if (!newType || newType === 'Semua' || newType === 'Lainnya') return;
+    
+    // Check locally first
+    const currentTypes = useDocumentStore.getState().customDocumentTypes;
+    if (currentTypes.includes(newType)) return;
+    
+    // Optimistic update
+    set({ customDocumentTypes: [...currentTypes, newType] });
+    
+    try {
+      await api('/document-types', {
+        method: 'POST',
+        body: JSON.stringify({ name: newType })
+      });
+    } catch (err) {
+      // Revert on error
+      console.error(err);
+      set({ customDocumentTypes: currentTypes });
+    }
+  },
+
+  removeCustomDocumentType: async (typeToRemove) => {
+    const currentTypes = useDocumentStore.getState().customDocumentTypes;
+    
+    // Optimistic update
+    set({ customDocumentTypes: currentTypes.filter(t => t !== typeToRemove) });
+    
+    try {
+      await api(`/document-types/${encodeURIComponent(typeToRemove)}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      // Revert on error
+      console.error(err);
+      set({ customDocumentTypes: currentTypes });
+    }
+  },
 
   setFilterType: (type) => set({ filterType: type }),
   setFilterDepartment: (dept) => set({ filterDepartment: dept }),
   setFilterStatus: (status) => set({ filterStatus: status }),
   setSearchQuery: (query) => set({ searchQuery: query }),
 
-  /**
-   * fetchDocuments: Ambil semua dokumen dari backend.
-   */
   fetchDocuments: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -29,10 +79,6 @@ const useDocumentStore = create((set) => ({
     }
   },
 
-  /**
-   * uploadDocument: Upload dokumen via POST /api/documents (multipart/form-data).
-   * Gunakan FormData untuk menyertakan file fisik.
-   */
   uploadDocument: async (docData, file, currentUser) => {
     const formData = new FormData();
     if (file) formData.append('file', file);
@@ -47,7 +93,6 @@ const useDocumentStore = create((set) => ({
       const data = await api('/documents', {
         method: 'POST',
         body: formData,
-        // JANGAN set Content-Type — biarkan browser set boundary multipart secara otomatis
       });
       const doc = normDoc({ ...data.document, uploadedById: currentUser?.id });
       set(state => ({ documents: [doc, ...state.documents] }));
@@ -58,17 +103,11 @@ const useDocumentStore = create((set) => ({
     }
   },
 
-  /**
-   * deleteDocument: Soft delete via PATCH /api/documents/:id
-   * Dokumen tidak benar-benar dihapus dari DB — hanya is_deleted = true.
-   */
   deleteDocument: async (docId) => {
-    // Temukan dbId dari dokumen
     const allDocs = useDocumentStore.getState().documents;
     const doc = allDocs.find(d => d.id === docId);
     if (!doc) return;
 
-    // Optimistic update
     set(state => ({
       documents: state.documents.map(d => d.id === docId ? { ...d, isDeleted: true } : d)
     }));
@@ -79,7 +118,6 @@ const useDocumentStore = create((set) => ({
         body: JSON.stringify({ is_deleted: true }),
       });
     } catch (err) {
-      // Rollback
       set(state => ({
         documents: state.documents.map(d => d.id === docId ? { ...d, isDeleted: false } : d),
         error: err.message
@@ -88,9 +126,6 @@ const useDocumentStore = create((set) => ({
   },
 }));
 
-/**
- * normDoc: Normalisasi shape document dari backend ke format yang dipakai UI.
- */
 const normDoc = (d) => ({
   id: d.id,
   dbId: d.id,

@@ -4,7 +4,7 @@ import useAuthStore from '../../store/useAuthStore';
 import Button from '../../components/Button';
 
 const UploadDocumentModal = ({ onClose, initialVendorId = '', initialTags = '' }) => {
-  const { uploadDocument } = useDocumentStore();
+  const { uploadDocument, customDocumentTypes } = useDocumentStore();
   const { user } = useAuthStore();
   
   const [file, setFile] = useState(null);
@@ -63,16 +63,13 @@ const UploadDocumentModal = ({ onClose, initialVendorId = '', initialTags = '' }
         <div>
           <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Tipe Dokumen</label>
           <select value={type} onChange={e => setType(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: 'var(--rounded-sm)', border: '1px solid var(--color-hairline)', fontSize: '15px', outline: 'none' }}>
-            <option value="Invoice">Invoice</option>
-            <option value="Packing List">Packing List</option>
-            <option value="Health Certificate">Health Certificate</option>
-            <option value="Certificate Of Origin">Certificate Of Origin</option>
-            <option value="Bill Of Lading">Bill Of Lading</option>
-            <option value="Catch Certificate">Catch Certificate</option>
-            <option value="Captain Statement">Captain Statement</option>
-            <option value="Dolphin Safe Certificate">Dolphin Safe Certificate</option>
-            <option value="Certificate Of Analysis">Certificate Of Analysis</option>
-            <option value="Prior Notice">Prior Notice</option>
+            
+            {/* 100% MERENDER OPSI SECARA DINAMIS */}
+            {customDocumentTypes.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+            
+            <option value="Lainnya">Lainnya</option>
           </select>
         </div>
         

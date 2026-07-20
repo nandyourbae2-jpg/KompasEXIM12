@@ -1,5 +1,4 @@
 const express = require('express');
-const morgan = require('morgan');
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
@@ -37,7 +36,6 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
-app.use(morgan('dev'));
 
 // Setup uploads directory
 const uploadsDir = process.env.VERCEL ? '/tmp/uploads' : path.join(__dirname, 'uploads');

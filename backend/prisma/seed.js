@@ -120,6 +120,18 @@ async function main() {
     }
   });
 
+  console.log('Seeding Document Types...');
+  const INITIAL_TYPES = ["Invoice", "Packing List", "Health Certificate", "Certificate Of Origin", "Bill Of Lading", "Catch Certificate", "Captain Statement", "Dolphin Safe Certificate", "Certificate Of Analysis", "Prior Notice", "Manifest"];
+  
+  for (const type of INITIAL_TYPES) {
+    await prisma.documentType.upsert({
+      where: { name: type },
+      update: {},
+      create: { name: type },
+    });
+  }
+  console.log('Document Types seeded.');
+
   console.log('Seeding finished.');
 }
 

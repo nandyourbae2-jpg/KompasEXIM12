@@ -16,6 +16,7 @@ export const api = async (endpoint, options = {}) => {
   const isFormData = options.body instanceof FormData;
 
   const headers = {
+    'Pinggy-Skip': 'true',
     ...(!isFormData && { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   };

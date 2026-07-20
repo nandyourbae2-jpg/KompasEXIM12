@@ -32,3 +32,5 @@ backend/uploads/
 /DESIGN-apple.md
 /Developing Kompas EXIM Platform.md
 /MasterPrompt_FigmaAI_KompasEXIM.md
+.vercel
+.env*
