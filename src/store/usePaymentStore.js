@@ -1,7 +1,8 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import api from '../lib/api';
 
-const usePaymentStore = create((set, get) => ({
+const usePaymentStore = create(persist((set, get) => ({
   jobOrders: [],
   isLoading: false,
   error: null,
@@ -220,7 +221,7 @@ const usePaymentStore = create((set, get) => ({
       return { jobOrders: currentJOs };
     });
   },
-}));
+})), { name: 'payment-storage' }));
 
 /**
  * normJobOrder: Normalisasi shape job order dari backend ke format yang dipakai UI.

@@ -47,7 +47,7 @@ const PaymentDashboard = () => {
     container: {
       display: 'flex',
       flexDirection: 'column',
-      height: '100%',
+      minHeight: '100%',
       backgroundColor: 'var(--color-canvas-parchment)',
       fontFamily: 'var(--font-family-body)',
       color: 'var(--color-ink)',
@@ -79,7 +79,6 @@ const PaymentDashboard = () => {
       flexDirection: 'column',
       gap: 'var(--spacing-lg)',
       flex: 1,
-      overflowY: 'auto',
     },
     kpiGrid: {
       display: 'grid',
