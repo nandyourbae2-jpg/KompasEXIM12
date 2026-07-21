@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { emptyShipmentCosts, emptyContainer } from '../utils/importCalc';
 import usePaymentStore from './usePaymentStore';
 
@@ -111,7 +112,7 @@ const generateMasterId = (prefix, list) => {
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
-const useImportOperationalStore = create((set, get) => ({
+const useImportOperationalStore = create(persist((set, get) => ({
   shipments: initialShipments,
   masterData: initialMasterData,
 
@@ -324,6 +325,6 @@ const useImportOperationalStore = create((set, get) => ({
       masterData: { ...state.masterData, depoPrices: state.masterData.depoPrices.filter(r => r.id !== id) },
     }));
   },
-}));
+})), { name: 'importops-storage' }));
 
 export default useImportOperationalStore;
