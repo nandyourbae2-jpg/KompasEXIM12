@@ -1,0 +1,1 @@
+    const documents = db.prepare("SELECT * FROM documents WHERE status != 'Deleted' ORDER BY created_at DESC").all();

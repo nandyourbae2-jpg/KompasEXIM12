@@ -1,4 +1,8 @@
 import { create } from 'zustand';
+import api from '../lib/api';
+import { setToken, clearToken, getToken } from '../utils/authToken';
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // ─── Dummy Users ──────────────────────────────────────────────────────────────
 // Model 2 dimensi: departemen × level_otoritas.
@@ -9,8 +13,9 @@ import { create } from 'zustand';
 
 const DUMMY_USERS = [
   // ── Departemen: Import ──────────────────────────────────────────────────────
+  // IDs and employee_ids MUST match the database (init.js seed)
   {
-    id: 2,
+    id: 4,
     name: 'Yoda',
     tipe_karyawan: 'Karyawan Tetap',
     status_aktif: true,
@@ -19,7 +24,7 @@ const DUMMY_USERS = [
     level_otoritas: 'Staff Dept',
   },
   {
-    id: 3,
+    id: 5,
     name: 'Katon',
     tipe_karyawan: 'Karyawan Tetap',
     status_aktif: true,
@@ -28,7 +33,7 @@ const DUMMY_USERS = [
     level_otoritas: 'Staff Dept',
   },
   {
-    id: 4,
+    id: 6,
     name: 'Thomas',
     tipe_karyawan: 'Karyawan Tetap',
     status_aktif: true,
@@ -37,7 +42,7 @@ const DUMMY_USERS = [
     level_otoritas: 'Staff Dept',
   },
   {
-    id: 5,
+    id: 7,
     name: 'Keenand',
     tipe_karyawan: 'Karyawan Magang',
     status_aktif: true,
@@ -48,91 +53,93 @@ const DUMMY_USERS = [
 
   // ── Departemen: Export ──────────────────────────────────────────────────────
   {
-    id: 7,
-    name: 'Nita L.',
+    id: 8,
+    name: 'Andi',
     tipe_karyawan: 'Karyawan Tetap',
     status_aktif: true,
-    employee_id: 'EXIM-EXP-02',
+    employee_id: 'EXIM-EXP-01',
     departemen: 'Export',
     level_otoritas: 'Staff Dept',
   },
 
   // ── Departemen: Administrasi Export (AE) ────────────────────────────────────
   {
-    id: 9,
-    name: 'Maya C.',
+    id: 101,
+    name: 'Monica',
+    nama: 'Monica',
     tipe_karyawan: 'Karyawan Tetap',
     status_aktif: true,
-    employee_id: 'EXIM-AE-02',
-    departemen: 'Administrasi Export (AE)',
+    employee_id: 'AE-001',
+    departemen: 'Administrasi Export',
+    level_otoritas: 'Staff Dept',
+  },
+  {
+    id: 107,
+    name: 'Wenny',
+    nama: 'Wenny',
+    tipe_karyawan: 'Karyawan Tetap',
+    status_aktif: true,
+    employee_id: 'AE-002',
+    departemen: 'Administrasi Export',
+    level_otoritas: 'Staff Dept',
+  },
+  {
+    id: 108,
+    name: 'Ama',
+    nama: 'Ama',
+    tipe_karyawan: 'Karyawan Tetap',
+    status_aktif: true,
+    employee_id: 'AE-003',
+    departemen: 'Administrasi Export',
     level_otoritas: 'Staff Dept',
   },
 
-  // ── Departemen: Account Officer ────────────────────────────────────────────
+  // ── Supervisor ──────────────────────────────────────────────────────────────
   {
-    id: 10,
-    name: 'Anton D.',
-    tipe_karyawan: 'Karyawan Tetap',
-    status_aktif: true,
-    employee_id: 'EXIM-AO-01',
-    departemen: 'Account Officer',
-    level_otoritas: 'Staff Dept',
-  },
-
-  // ── Supervisor (sekarang per departemen) ──────────────────────────────────
-  {
-    id: 1,
+    id: 2,
     name: 'Bapak SPV Import',
     tipe_karyawan: 'Karyawan Tetap',
     status_aktif: true,
-    employee_id: 'EXIM-SPV-IMP',
+    employee_id: 'SPV-IMP-01',
     departemen: 'Import',
     level_otoritas: 'Supervisor',
   },
   {
-    id: 101,
+    id: 3,
     name: 'Ibu SPV Export',
     tipe_karyawan: 'Karyawan Tetap',
     status_aktif: true,
-    employee_id: 'EXIM-SPV-EXP',
+    employee_id: 'SPV-EXP-01',
     departemen: 'Export',
     level_otoritas: 'Supervisor',
   },
   {
     id: 102,
-    name: 'Bapak SPV AE',
+    name: 'Amal',
+    nama: 'Amal',
     tipe_karyawan: 'Karyawan Tetap',
     status_aktif: true,
-    employee_id: 'EXIM-SPV-AE',
-    departemen: 'Administrasi Export (AE)',
-    level_otoritas: 'Supervisor',
-  },
-  {
-    id: 103,
-    name: 'Ibu SPV AO',
-    tipe_karyawan: 'Karyawan Tetap',
-    status_aktif: true,
-    employee_id: 'EXIM-SPV-AO',
-    departemen: 'Account Officer',
+    employee_id: 'SPV-AE-001',
+    departemen: 'Administrasi Export',
     level_otoritas: 'Supervisor',
   },
 
-  // ── Manager (lintas semua departemen) ─────────────────────────────────────
+  // ── Manager ─────────────────────────────────────────────────────────────────
   {
-    id: 11,
-    name: 'Jori',
+    id: 1,
+    name: 'Bapak Manager',
     tipe_karyawan: 'Karyawan Tetap',
     status_aktif: true,
-    employee_id: 'EXIM-MGR-01',
+    employee_id: 'MGR-001',
     departemen: null,
     level_otoritas: 'Manager',
   },
 ];
 
-const SESSION_KEY = 'kompas_exim_session';
+// SESSION_KEY has been moved to authToken.js
 
 // ─── Store ────────────────────────────────────────────────────────────────────
-const useAuthStore = create((set) => ({
+const useAuthStore = create((set, get) => ({
   user: null,
   isLoading: false,
   error: null,
@@ -150,7 +157,7 @@ const useAuthStore = create((set) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch(`${BASE_URL}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -162,10 +169,18 @@ const useAuthStore = create((set) => ({
 
       if (!response.ok) {
         // Vercel Demo Fallback: Jika backend error (karena isu Vercel SQLite), gunakan data dummy
-        const dummyUser = DUMMY_USERS.find(u => u.employee_id === employee_id);
+        let dummyUser = DUMMY_USERS.find(u => u.employee_id === employee_id);
         if (dummyUser && password === '123456') {
+          if (dummyUser.status_aktif === false || dummyUser.status_aktif === 0) {
+            set({ error: 'Akun Anda sudah tidak aktif', isLoading: false });
+            return null;
+          }
+          if (['Staff Dept', 'Supervisor'].includes(dummyUser.level_otoritas) && !dummyUser.departemen) {
+            set({ error: `Departemen wajib ada untuk role ${dummyUser.level_otoritas}`, isLoading: false });
+            return null;
+          }
           console.warn("Backend error, using dummy fallback for demo");
-          sessionStorage.setItem(SESSION_KEY, JSON.stringify(dummyUser));
+          setToken(dummyUser);
           set({ user: dummyUser, isLoading: false, error: null });
           return dummyUser;
         }
@@ -174,19 +189,43 @@ const useAuthStore = create((set) => ({
         return null;
       }
 
-      const user = data.user;
+      let user = { ...data.user, name: data.user.nama, token: data.token };
 
-      // Simpan session ke sessionStorage agar persist selama tab terbuka
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+      // Validasi akun aktif
+      if (user.status_aktif === false || user.status_aktif === 0) {
+        set({ error: 'Akun Anda sudah tidak aktif', isLoading: false });
+        return null;
+      }
+
+      // Validasi departemen berdasarkan role
+      if (['Staff Dept', 'Supervisor'].includes(user.level_otoritas)) {
+        if (!user.departemen) {
+          set({ error: `Departemen wajib ada untuk role ${user.level_otoritas}`, isLoading: false });
+          return null;
+        }
+      }
+
+      // Validasi tipe akses yang dipilih di UI sesuai dengan user (opsional jika dibutuhkan, tapi untuk sekarang kita ikut instruksi khusus)
+
+      // Simpan session menggunakan helper authToken
+      setToken(user);
 
       set({ user, isLoading: false, error: null });
       return user;
     } catch (err) {
       // Vercel Demo Fallback: Jika backend mati total, gunakan data dummy
-      const dummyUser = DUMMY_USERS.find(u => u.employee_id === employee_id);
+      let dummyUser = DUMMY_USERS.find(u => u.employee_id === employee_id);
       if (dummyUser && password === '123456') {
+        if (dummyUser.status_aktif === false || dummyUser.status_aktif === 0) {
+          set({ error: 'Akun Anda sudah tidak aktif', isLoading: false });
+          return null;
+        }
+        if (['Staff Dept', 'Supervisor'].includes(dummyUser.level_otoritas) && !dummyUser.departemen) {
+          set({ error: `Departemen wajib ada untuk role ${dummyUser.level_otoritas}`, isLoading: false });
+          return null;
+        }
         console.warn("Backend unreachable, using dummy fallback for demo");
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify(dummyUser));
+        setToken(dummyUser);
         set({ user: dummyUser, isLoading: false, error: null });
         return dummyUser;
       }
@@ -199,66 +238,129 @@ const useAuthStore = create((set) => ({
   /**
    * logout: Hapus session dan reset state.
    */
-  /**
-   * Manajemen Staff (Supervisor & Manager)
-   */
-  addStaff: (staffData) => set(state => {
-    // Determine new ID (max id + 1)
-    const newId = Math.max(...DUMMY_USERS.map(u => u.id)) + 1 + Math.floor(Math.random() * 100);
-    const newUser = {
-      id: newId,
-      name: staffData.name,
-      employee_id: staffData.employee_id,
-      departemen: staffData.departemen,
-      level_otoritas: 'Staff Dept',
-      tipe_karyawan: staffData.tipe_karyawan,
-      status_aktif: true
-    };
-    DUMMY_USERS.push(newUser);
-    // Not updating state.user since this is just DUMMY_USERS mutation
-    return { ...state }; 
-  }),
+  allUsers: [],
 
-  updateStaff: (id, staffData) => set(state => {
-    const idx = DUMMY_USERS.findIndex(u => u.id === id);
-    if (idx !== -1) {
-      DUMMY_USERS[idx] = { ...DUMMY_USERS[idx], ...staffData };
+  fetchAllUsers: async () => {
+    try {
+      const users = await api('/users/all');
+      const mappedUsers = users.map(u => ({ ...u, name: u.nama }));
+      set({ allUsers: mappedUsers });
+    } catch (error) {
+      console.error('Error fetching staff:', error);
     }
-    return { ...state };
-  }),
+  },
 
-  toggleStaffStatus: (id) => set(state => {
-    const idx = DUMMY_USERS.findIndex(u => u.id === id);
-    if (idx !== -1) {
-      DUMMY_USERS[idx].status_aktif = !DUMMY_USERS[idx].status_aktif;
+  addStaff: async (staffData) => {
+    try {
+      const newUserRaw = await api('/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nama: staffData.name,
+          employee_id: staffData.employee_id,
+          departemen: staffData.departemen,
+          tipe_karyawan: staffData.tipe_karyawan
+        })
+      });
+      const newUser = { ...newUserRaw, name: newUserRaw.nama };
+      set(state => ({ allUsers: [...state.allUsers, newUser] }));
+    } catch (error) {
+      console.error('Error adding staff:', error);
+      throw error;
     }
-    return { ...state };
-  }),
+  },
 
-  getStaffByDept: (dept) => DUMMY_USERS.filter(u => u.departemen === dept && u.level_otoritas === 'Staff Dept'),
-  getAllStaff: () => DUMMY_USERS.filter(u => u.level_otoritas === 'Staff Dept'),
-  getAllUsers: () => DUMMY_USERS, // Expose for lookup
+  updateStaff: async (id, staffData) => {
+    try {
+      const updatedRaw = await api(`/staff/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nama: staffData.name,
+          tipe_karyawan: staffData.tipe_karyawan
+        })
+      });
+      const updated = { ...updatedRaw, name: updatedRaw.nama };
+      set(state => ({
+        allUsers: state.allUsers.map(u => u.id === id ? updated : u)
+      }));
+    } catch (error) {
+      console.error('Error updating staff:', error);
+      throw error;
+    }
+  },
+
+  toggleStaffStatus: async (id) => {
+    try {
+      const staff = get().allUsers.find(u => u.id === id);
+      if (!staff) return;
+      const newStatus = staff.status_aktif === 1 ? 0 : 1;
+      
+      await api(`/staff/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status_aktif: newStatus })
+      });
+      set(state => ({
+        allUsers: state.allUsers.map(u => u.id === id ? { ...u, status_aktif: newStatus } : u)
+      }));
+    } catch (error) {
+      console.error('Error toggling staff status:', error);
+      throw error;
+    }
+  },
+
+  getStaffByDept: (dept) => get().allUsers.filter(u => u.departemen === dept && u.level_otoritas === 'Staff Dept'),
+  getAllStaff: () => get().allUsers.filter(u => u.level_otoritas === 'Staff Dept'),
+  getAllUsers: () => get().allUsers,
 
   logout: () => {
-    sessionStorage.removeItem(SESSION_KEY);
+    clearToken();
     set({ user: null, error: null });
   },
 
   /**
    * checkSession: Periksa apakah ada session yang tersimpan di sessionStorage.
    * Dipanggil saat App pertama kali load untuk restore state login.
+   * MELAKUKAN SINKRONISASI dengan database live agar ID dummy lama diperbarui!
    */
   checkSession: async () => {
     set({ isLoading: true });
-    await new Promise(resolve => setTimeout(resolve, 0));
 
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem('kompas_exim_session'); // Using raw to test existence
     if (raw) {
       try {
         const user = JSON.parse(raw);
+        
+        // Coba sinkronisasi dengan database backend agar ID selalu up-to-date (Bugfix)
+        try {
+          const res = await fetch(`${BASE_URL}/users/all`, {
+            headers: { 'Authorization': `Bearer ${user.token}` }
+          });
+          if (res.status === 401) {
+            clearToken();
+            set({ user: null, isLoading: false });
+            console.error('checkSession 401 Redirect Intercepted');
+            // window.location.hash = '#/login';
+            return;
+          }
+          if (res.ok) {
+            const allUsersRaw = await res.json();
+            const realUser = allUsersRaw.find(u => u.employee_id === user.employee_id);
+            if (realUser) {
+              const updatedUser = { ...realUser, name: realUser.nama, token: user.token };
+              setToken(updatedUser);
+              set({ user: updatedUser, isLoading: false });
+              return;
+            }
+          }
+        } catch(e) { 
+          console.error('Session sync failed, using cached data', e); 
+        }
+
         set({ user, isLoading: false });
       } catch {
-        sessionStorage.removeItem(SESSION_KEY);
+        clearToken();
         set({ user: null, isLoading: false });
       }
     } else {

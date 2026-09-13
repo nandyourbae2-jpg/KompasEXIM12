@@ -4,9 +4,10 @@ import useAuthStore from '../store/useAuthStore';
 import useImportProjectStore from '../store/useImportProjectStore';
 import Button from './Button';
 import { Package, X } from 'lucide-react';
+import api from '../lib/api';
 
 const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultAssignee = '', isPersonal = false }) => {
-  const { user, getStaffByDept, getAllUsers } = useAuthStore();
+  const { user } = useAuthStore();
   const { addTask } = useTaskStore();
   const { importProjects } = useImportProjectStore();
 
@@ -17,52 +18,53 @@ const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultA
   const [newTaskDueDate, setNewTaskDueDate] = useState('');
   const [newTaskShipmentUn, setNewTaskShipmentUn] = useState('');
   const [newTaskNotes, setNewTaskNotes] = useState('');
+  
   const [formError, setFormError] = useState('');
+  const [assignableUsers, setAssignableUsers] = useState([]);
+  const [loadingAssignable, setLoadingAssignable] = useState(false);
+
+  // Role checks
+  const isStaff = user?.level_otoritas === 'Staff Dept';
+  const isSpv = user?.level_otoritas === 'Supervisor';
+  const isManager = user?.level_otoritas === 'Manager';
 
   useEffect(() => {
     if (isOpen && user) {
-      if (user.level_otoritas === 'Staff Dept') {
-        setNewTaskDepartment(user.departemen);
-        setNewTaskAssignee(user.id);
-      } else if (user.level_otoritas === 'Supervisor') {
-        setNewTaskDepartment(user.departemen);
-        setNewTaskAssignee(isPersonal ? user.id : (defaultAssignee || ''));
-      } else if (user.level_otoritas === 'Manager') {
-        setNewTaskDepartment(defaultDepartment);
-        setNewTaskAssignee(defaultAssignee);
-      }
+      setNewTaskDepartment(isManager ? defaultDepartment : user.departemen);
+      setNewTaskAssignee(isStaff ? user.id : (isPersonal ? user.id : defaultAssignee));
       setNewTaskTitle('');
       setNewTaskPriority('Sedang');
       setNewTaskDueDate('');
       setNewTaskShipmentUn('');
       setNewTaskNotes('');
       setFormError('');
+
+      // Fetch assignable users if Manager or Supervisor
+      if (isManager || isSpv) {
+        setLoadingAssignable(true);
+        const params = new URLSearchParams({
+          level_otoritas: user.level_otoritas,
+          departemen: user.departemen || ''
+        });
+        api(`/users/assignable?${params.toString()}`)
+          .then(data => {
+            setAssignableUsers(data);
+            setLoadingAssignable(false);
+          })
+          .catch(err => {
+            console.error('Error fetching assignable users:', err);
+            setLoadingAssignable(false);
+          });
+      }
     }
-  }, [isOpen, user, defaultDepartment]);
+  }, [isOpen, user, defaultDepartment, defaultAssignee, isPersonal, isStaff, isManager, isSpv]);
 
   if (!isOpen || !user) return null;
 
-  // Determine role-based logic
-  const isStaff = user.level_otoritas === 'Staff Dept';
-  const isSpv = user.level_otoritas === 'Supervisor';
-  const isManager = user.level_otoritas === 'Manager';
-
-  const sumberTugas = isStaff ? 'MANUAL' : 'ESCALATION';
+  const finalAssigneeTemp = isStaff ? user.id : (isPersonal ? user.id : newTaskAssignee);
+  const sumberTugas = (finalAssigneeTemp === user.id) ? 'Manual' : 'Escalation';
   const assignedById = user.id;
 
-  // Populate Assignee Options
-  let assigneeOptions = [];
-  if (isSpv) {
-    if (isPersonal) {
-      assigneeOptions = [user];
-    } else {
-      assigneeOptions = [user, ...getStaffByDept(user.departemen).filter(s => s.status_aktif !== false)];
-    }
-  } else if (isManager) {
-    assigneeOptions = getAllUsers().filter(s => s.level_otoritas === 'Supervisor' && s.status_aktif !== false);
-  }
-
-  // Populate Import Projects
   const activeImportProjects = importProjects.filter(p => p.status !== 'Completed');
   const importProjectOptions = activeImportProjects.map(p => ({
     value: p.id,
@@ -74,31 +76,42 @@ const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultA
       setFormError('Judul Tugas wajib diisi');
       return;
     }
-    const finalAssignee = newTaskAssignee || (isPersonal ? user.id : '');
-    
-    if (!finalAssignee && !isStaff) {
-      setFormError('Assignee wajib dipilih');
+    if (!newTaskPriority) {
+      setFormError('Pilih prioritas');
+      return;
+    }
+    if (!newTaskDueDate) {
+      setFormError('Isi tanggal tenggat');
       return;
     }
 
+    const finalAssignee = isStaff ? user.id : (isPersonal ? user.id : newTaskAssignee);
+    
+    if (!finalAssignee && (isManager || isSpv)) {
+      setFormError('Pilih staff/SPV yang akan ditugaskan');
+      return;
+    }
 
     let finalDepartment = user.departemen;
-    if (isManager) {
-      const selectedSpv = assigneeOptions.find(s => s.id === Number(finalAssignee));
-      finalDepartment = selectedSpv ? selectedSpv.departemen : 'Import';
+    if (isManager || isSpv) {
+      finalDepartment = newTaskDepartment;
+      // You could also extract from the selected assignable user if they belong to a specific department
+      const selectedUser = assignableUsers.find(u => u.id === Number(finalAssignee));
+      if (selectedUser && selectedUser.departemen) finalDepartment = selectedUser.departemen;
     }
 
     addTask({
-      title: newTaskTitle,
+      title: newTaskTitle.trim(),
       department: finalDepartment,
       priority: newTaskPriority,
-      assigneeId: Number(finalAssignee) || user.id,
-      dueDate: newTaskDueDate || null,
-      importProjectId: null,
-      shipment_un: newTaskShipmentUn || null,
+      assigneeId: Number(finalAssignee),
+      dueDate: newTaskDueDate,
+      importProjectId: newTaskShipmentUn || null,
       sumber_tugas: sumberTugas,
       assigned_by_id: assignedById,
-      notes: newTaskNotes
+      notes: newTaskNotes.trim() || '',
+      deskripsi: newTaskNotes.trim() || '',
+      catatan_progress: newTaskNotes.trim() || ''
     });
 
     onClose();
@@ -107,7 +120,7 @@ const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultA
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      backgroundColor: 'rgba(15, 23, 42, 0.4)', // slate-900 with opacity
+      backgroundColor: 'rgba(15, 23, 42, 0.4)',
       backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       zIndex: 1000,
@@ -167,7 +180,7 @@ const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultA
           />
         </div>
 
-        {/* ── Tautkan ke Nomor IMP (Wajib) ── */}
+        {/* Tautkan ke Nomor IMP (Wajib) */}
         <div style={{ backgroundColor: 'var(--color-canvas-parchment)', padding: '16px', borderRadius: '8px', border: '1px solid var(--color-hairline)' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600', marginBottom: '8px' }}>
             <Package size={14} />
@@ -185,29 +198,65 @@ const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultA
           </select>
         </div>
 
+        {/* CONDITIONAL: Departemen (hanya untuk Manager) */}
+        {isManager && (
+          <div>
+            <label style={labelStyle}>Departemen</label>
+            <select
+              value={newTaskDepartment}
+              onChange={e => setNewTaskDepartment(e.target.value)}
+              style={modalInputStyle}
+            >
+              <option value="Import">Import</option>
+              <option value="Export">Export</option>
+              <option value="Account Officer">Account Officer</option>
+              <option value="Administrasi Export">Administrasi Export</option>
+            </select>
+          </div>
+        )}
+
         {/* Assignee */}
         <div>
           <label style={labelStyle}>Assignee <span style={{ color: 'var(--color-status-danger)' }}>*</span></label>
           {isStaff || (isSpv && isPersonal) ? (
             <input
               type="text"
-              value={isSpv ? user.name : user.name} // Since isPersonal locks to user
+              value={user.nama || user.name}
               disabled
               style={{ ...modalInputStyle, backgroundColor: 'var(--color-canvas-parchment)', cursor: 'not-allowed' }}
             />
           ) : (
-            <select
-              value={newTaskAssignee}
-              onChange={e => setNewTaskAssignee(e.target.value)}
-              style={modalInputStyle}
-            >
-              <option value="" disabled>-- Pilih PIC ({isSpv ? 'Staff Dept' : 'Supervisor'}) --</option>
-              {assigneeOptions.map(staff => (
-                <option key={staff.id} value={staff.id}>{staff.name}</option>
-              ))}
-            </select>
+            <div>
+              {loadingAssignable ? (
+                <p style={{fontSize: '13px'}}>Memuat daftar...</p>
+              ) : assignableUsers.length === 0 ? (
+                <p style={{color: 'var(--color-status-danger)', fontSize: '13px', margin: 0}}>
+                  {(isManager || isSpv) ? (assignableUsers.length === 0 ? 'Tidak ada bawahan aktif' : 'Pilih Assignee') : 'Tidak ada staff aktif di departemen ini'}
+                </p>
+              ) : (
+                <select
+                  value={newTaskAssignee}
+                  onChange={e => setNewTaskAssignee(e.target.value)}
+                  style={modalInputStyle}
+                >
+                  <option value="" disabled>-- Pilih PIC ({isSpv ? 'Staff Dept' : 'Supervisor'}) --</option>
+                  {assignableUsers.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.nama} {u.departemen ? `(${u.departemen})` : ''} {u.tipe_karyawan === 'Karyawan Magang' ? '· Magang' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           )}
         </div>
+
+        {/* INFORMASI: Untuk Staff */}
+        {isStaff && (
+          <p style={{fontSize: '0.85rem', color: 'var(--color-ink-muted-48)', margin: '-8px 0 0 0'}}>
+            Tugas ini akan ditambahkan ke workdesk Anda sendiri.
+          </p>
+        )}
 
         {/* Prioritas & Tenggat */}
         <div style={{ display: 'flex', gap: '16px' }}>
@@ -251,7 +300,13 @@ const TaskFormModal = ({ isOpen, onClose, defaultDepartment = 'Import', defaultA
         {/* Tombol Aksi */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
           <Button variant="secondary" onClick={onClose}>Batal</Button>
-          <Button variant="primary" onClick={handleSaveTask}>{isStaff ? 'Simpan Tugas' : 'Assign Tugas'}</Button>
+          <Button 
+            variant="primary" 
+            onClick={handleSaveTask}
+            disabled={!isStaff && !isPersonal && (!(isManager || isSpv) || assignableUsers.length === 0)}
+          >
+            {isStaff ? 'Simpan Tugas' : 'Assign Tugas'}
+          </Button>
         </div>
       </div>
     </div>

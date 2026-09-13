@@ -1,0 +1,376 @@
+Created At: 2026-07-23T08:34:44Z
+Completed At: 2026-07-23T08:34:47Z
+The following changes were made by the multi_replace_file_content tool to: /Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js. If relevant, proactively run terminal commands to execute this code for the USER. Don't ask for permission.
+[diff_block_start]
+@@ -1277,7 +1277,225 @@
+     const openReports = db.prepare('SELECT count(*) as c FROM reports WHERE tipe="Problem Report" AND id NOT IN (SELECT problem_report_id FROM reports WHERE problem_report_id IS NOT NULL)').get().c;
+     const tasks = db.prepare('SELECT * FROM tasks ORDER BY updated_at DESC LIMIT 5').all();
+     
+-    res.json({ totalShipmentAktif, outstandingUtang: utang, openProblemReports: openReports, latestTasks: tasks });
++    const stagnantDNs = db.prepare(`
++      SELECT dn_number, claim_kepada, jumlah_klaim, status, tanggal_dn
++      FROM debit_notes
++      WHERE status IN ('Diterbitkan', 'Diakui')
++      AND (julianday('now') - julianday(tanggal_dn)) > 30
++    `).all();
++
++    res.json({ totalShipmentAktif, outstandingUtang: utang, openProblemReports: openReports, latestTasks: tasks, stagnantDNs });
++  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
++});
++
++// --- 8. DEBIT NOTES ---
++app.get('/api/debit-notes/summary', authenticateToken, (req, res) => {
++  try {
++    const { level_otoritas, departemen, id: userId } = req.user;
++    const { bulan } = req.query;
++
++    let query = `SELECT * FROM debit_notes dn WHERE 1=1`;
++    const params = [];
++
++    if (level_otoritas === 'Staff Dept') {
++      query += ` AND dn.dibuat_oleh_id = ?`;
++      params.push(userId);
++    } else if (level_otoritas === 'Supervisor') {
++      query += ` AND dn.departemen = ?`;
++      params.push(departemen);
++    }
++
++    if (bulan) {
++      query += ` AND strftime('%Y-%m', dn.tanggal_dn) = ?`;
++      params.push(bulan);
++    }
++
++    const dns = db.prepare(query).all(...params);
++
++    const total_klaim = dns.reduce((sum, dn) => sum + dn.jumlah_klaim, 0);
++    const total_recovery = dns.filter(dn => dn.status === 'Settled').reduce((sum, dn) => sum + dn.jumlah_recovery, 0);
++    const outstanding = total_klaim - total_recovery;
++    const dn_aktif = dns.filter(dn => ['Draft', 'Diterbitkan', 'Diakui', 'Negosiasi'].includes(dn.status)).length;
++
++    res.json({ total_klaim, total_recovery, outstanding, dn_aktif });
++  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
++});
++
++app.get('/api/debit-notes/available-months', (req, res) => {
++  try {
++    const months = db.prepare(`
++      SELECT DISTINCT
++        strftime('%Y-%m', tanggal_dn) as month_key,
++        strftime('%m', tanggal_dn) as bulan,
++        strftime('%Y', tanggal_dn) as tahun
++      FROM debit_notes
++      WHERE tanggal_dn IS NOT NULL
++      ORDER BY month_key DESC
++    `).all();
++    res.json(months);
++  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
++});
++
++app.get('/api/debit-notes', authenticateToken, (req, res) => {
++  try {
++    const { level_otoritas, departemen, id: userId } = req.user;
++    const { status, kategori, bulan, search } = req.query;
++
++    let query = \`
++      SELECT dn.*,
++        ip.task_unique_number, ip.supplier as project_supplier,
++        u.nama as dibuat_oleh_nama
++      FROM debit_notes dn
++      LEFT JOIN import_projects ip ON dn.import_project_id = ip.id
++      LEFT JOIN users u ON dn.dibuat_oleh_id = u.id
++      WHERE 1=1
++    \`;
++    const params = [];
++
++    // RBAC filter
++    if (level_otoritas === 'Staff Dept') {
++      query += \` AND dn.dibuat_oleh_id = ?\`;
++      params.push(userId);
++    } else if (level_otoritas === 'Supervisor') {
++      query += \` AND dn.departemen = ?\`;
++      params.push(departemen);
++    }
++    // Manager: tidak ada filter tambahan — lihat semua
++
++    if (status && status !== 'Semua Status') { query += \` AND dn.status = ?\`; params.push(status); }
++    if (kategori && kategori !== 'Semua Kategori') { query += \` AND dn.claim_kategori = ?\`; params.push(kategori); }
++    if (bulan) {
++      query += \` AND strftime('%Y-%m', dn.tanggal_dn) = ?\`;
++      params.push(bulan);
++    }
++    if (search) {
++      query += \` AND (dn.dn_number LIKE ? OR dn.claim_kepada LIKE ? OR dn.deskripsi LIKE ?)\`;
++      params.push(\`%\${search}%\`, \`%\${search}%\`, \`%\${search}%\`);
++    }
++
++    query += \` ORDER BY dn.created_at DESC\`;
++    res.json(db.prepare(query).all(...params));
++  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
++});
++
++app.get('/api/debit-notes/:id', authenticateToken, (req, res) => {
++  try {
++    const dn = db.prepare(\`
++      SELECT dn.*, ip.task_unique_number, ip.supplier as project_supplier, u.nama as dibuat_oleh_nama
++      FROM debit_notes dn
++      LEFT JOIN import_projects ip ON dn.import_project_id = ip.id
++      LEFT JOIN users u ON dn.dibuat_oleh_id = u.id
++      WHERE dn.id = ?\`).get(req.params.id);
++    if (!dn) return res.status(404).json({ error: 'Debit note tidak ditemukan' });
++
++    dn.history = db.prepare(\`
++      SELECT h.*, u.nama as diubah_oleh_nama
++      FROM debit_note_status_history h
++      LEFT JOIN users u ON h.diubah_oleh_id = u.id
++      WHERE h.debit_note_id = ?
++      ORDER BY h.diubah_pada DESC\`).all(dn.id);
++
++    res.json(dn);
++  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
++});
++
++function generateDNNumber() {
++  const tahun = new Date().getFullYear().toString().slice(-2);
++  const last = db.prepare("SELECT dn_number FROM debit_notes ORDER BY id DESC LIMIT 1").get();
++  let nextNum = 1;
++  if (last) {
++    const match = last.dn_number.match(/DN-(\\d+)/);
++    if (match) nextNum = parseInt(match[1]) + 1;
++  }
++  return \`DN-\${String(nextNum).padStart(4, '0')}-\${tahun}\`;
++}
++
++app.post('/api/debit-notes', authenticateToken, (req, res) => {
++  try {
++    const { import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id, mata_uang, tanggal_dn } = req.body;
++    const dn_number = generateDNNumber();
++    const departemen = req.user.departemen || 'Import';
++
++    let newId;
++    db.transaction(() => {
++      db.prepare(\`
++        INSERT INTO debit_notes (dn_number, import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id, mata_uang, departemen, dibuat_oleh_id, tanggal_dn)
++        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++      \`).run(dn_number, import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id || null, mata_uang || 'IDR', departemen, req.user.id, tanggal_dn || new Date().toISOString().split('T')[0]);
++      
++      newId = db.prepare('SELECT last_insert_rowid()').pluck().get();
++      db.prepare('INSERT INTO debit_note_status_history (debit_note_id, status_ke, catatan, diubah_oleh_id) VALUES (?, ?, ?, ?)').run(newId, 'Draft', 'Debit note dibuat', req.user.id);
++    })();
++    res.status(201).json({ success: true, id: newId });
++  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
++});
++
++app.patch('/api/debit-notes/:id', authenticateToken, (req, res) => {
++  try {
++    const { claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id, mata_uang, tanggal_dn } = req.body;
++    
++    // Check if status is Draft or Diterbitkan
++    const dn = db.prepare('SELECT status FROM debit_notes WHERE id = ?').get(req.params.id);
++    if (!dn || (dn.status !== 'Draft' && dn.status !== 'Diterbitkan')) {
++      return res.status(403).json({ error: 'Hanya DN dengan status Draft atau Diterbitkan yang dapat diedit.' });
++    }
++
++    db.prepare(\`
++      UPDATE debit_notes 
++      SET claim_kategori=?, claim_jenis=?, claim_kepada=?, jumlah_klaim=?, deskripsi=?, linked_job_order_id=?, mata_uang=?, tanggal_dn=?, updated_at=datetime('now')
++      WHERE id = ?
++    \`).run(claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id || null, mata_uang, tanggal_dn, req.params.id);
++    
++    res.json({ success: true });
++  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
++});
++
++app.patch('/api/debit-notes/:id/status', authenticateToken, (req, res) => {
++  try {
++    const { status_ke, catatan } = req.body;
++    const diubah_oleh_id = req.user.id;
++    
++    if (status_ke === 'Ditolak' && !catatan) {
++      return res.status(400).json({ error: 'Catatan wajib diisi jika klaim Ditolak.' });
++    }
++
++    db.transaction(() => {
++      const dn = db.prepare('SELECT status FROM debit_notes WHERE id = ?').get(req.params.id);
++      const status_dari = dn ? dn.status : '';
++
++      db.prepare(\`UPDATE debit_notes SET status = ?, updated_at = datetime('now') WHERE id = ?\`).run(status_ke, req.params.id);
++      db.prepare('INSERT INTO debit_note_status_history (debit_note_id, status_dari, status_ke, catatan, diubah_oleh_id) VALUES (?, ?, ?, ?, ?)').run(req.params.id, status_dari, status_ke, catatan || null, diubah_oleh_id);
++    })();
++    res.json({ success: true });
++  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
++});
++
++app.patch('/api/debit-notes/:id/recovery', authenticateToken, (req, res) => {
++  try {
++    const { jumlah_recovery, tanggal_recovery } = req.body;
++    db.prepare(\`UPDATE debit_notes SET jumlah_recovery = ?, tanggal_recovery = ?, updated_at = datetime('now') WHERE id = ?\`).run(jumlah_recovery, tanggal_recovery, req.params.id);
++    res.json({ success: true });
++  } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
++});
++
++app.delete('/api/debit-notes/:id', authenticateToken, (req, res) => {
++  try {
++    const dn = db.prepare('SELECT status, dibuat_oleh_id, departemen FROM debit_notes WHERE id = ?').get(req.params.id);
++    if (!dn) return res.status(404).json({ error: 'DN tidak ditemukan' });
++    if (dn.status !== 'Draft') return res.status(403).json({ error: 'Hanya DN Draft yang bisa dihapus' });
++    
++    // RBAC for delete
++    const { level_otoritas, departemen, id: userId } = req.user;
++    if (level_otoritas === 'Staff Dept' && dn.dibuat_oleh_id !== userId) {
++      return res.status(403).json({ error: 'Anda hanya dapat menghapus DN milik Anda sendiri.' });
++    } else if (level_otoritas === 'Supervisor' && dn.departemen !== departemen) {
++      return res.status(403).json({ error: 'Anda hanya dapat menghapus DN di departemen Anda.' });
++    } else if (level_otoritas === 'Manager') {
++      return res.status(403).json({ error: 'Manager tidak dapat menghapus DN.' });
++    }
++
++    db.prepare('DELETE FROM debit_notes WHERE id = ?').run(req.params.id);
++    res.json({ success: true });
+   } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+ });
+ 
+[diff_block_end]
+
+Please note that the above snippet only shows the MODIFIED lines from the last change. It shows up to 3 lines of unchanged lines before and after the modified lines. The actual file contents may have many more lines not shown.
+
+---NEXT---
+
+Created At: 2026-07-23T08:43:18Z
+Completed At: 2026-07-23T08:43:21Z
+The following changes were made by the multi_replace_file_content tool to: /Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js. If relevant, proactively run terminal commands to execute this code for the USER. Don't ask for permission.
+[diff_block_start]
+@@ -1370,7 +1370,7 @@
+     }
+     if (search) {
+       query += ` AND (dn.dn_number LIKE ? OR dn.claim_kepada LIKE ? OR dn.deskripsi LIKE ?)`;
+-      params.push(`%\${search}%`, `%\${search}%`, `%\${search}%`);
++      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+     }
+ 
+     query += ` ORDER BY dn.created_at DESC`;
+@@ -1406,7 +1406,7 @@
+     const match = last.dn_number.match(/DN-(\\d+)/);
+     if (match) nextNum = parseInt(match[1]) + 1;
+   }
+-  return `DN-\${String(nextNum).padStart(4, '0')}-\${tahun}`;
++  return `DN-${String(nextNum).padStart(4, '0')}-${tahun}`;
+ }
+ 
+ app.post('/api/debit-notes', authenticateToken, (req, res) => {
+[diff_block_end]
+
+Please note that the above snippet only shows the MODIFIED lines from the last change. It shows up to 3 lines of unchanged lines before and after the modified lines. The actual file contents may have many more lines not shown.
+
+---NEXT---
+
+Created At: 2026-07-23T09:25:55Z
+Completed At: 2026-07-23T09:25:56Z
+{"File":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","LineNumber":1413,"LineContent":"app.post('/api/debit-notes', authenticateToken, (req, res) =\u003e {"}
+
+---NEXT---
+
+Created At: 2026-07-23T09:26:12Z
+Completed At: 2026-07-23T09:26:13Z
+{"File":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","LineNumber":1292,"LineContent":"app.get('/api/debit-notes/summary', authenticateToken, (req, res) =\u003e {"}
+{"File":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","LineNumber":1324,"LineContent":"app.get('/api/debit-notes/available-months', (req, res) =\u003e {"}
+{"File":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","LineNumber":1339,"LineContent":"app.get('/api/debit-notes', authenticateToken, (req, res) =\u003e {"}
+{"File":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","LineNumber":1381,"LineContent":"app.get('/api/debit-notes/:id', authenticateToken, (req, res) =\u003e {"}
+{"File":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","LineNumber":1413,"LineContent":"app.post('/api/debit-notes', authenticateToken, (req, res) =\u003e {"}
+{"File":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","LineNumber":1433,"LineContent":"app.patch('/api/debit-notes/:id', authenticateToken, (req, res) =\u003e {"}
+{"File":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","LineNumber":1453,"LineContent":"app.patch('/api/debit-notes/:id/status', authenticateToken, (req, res) =\u003e {"}
+{"File":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","LineNumber":1473,"LineContent":"app.patch('/api/debit-notes/:id/recovery', authenticateToken, (req, res) =\u003e {"}
+{"File":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","LineNumber":1481,"LineContent":"app.delete('/api/debit-notes/:id', authenticateToken, (req, res) =\u003e {"}
+
+---NEXT---
+
+Created At: 2026-07-23T09:32:46Z
+Completed At: 2026-07-23T09:32:46Z
+File Path: `file:///Users/macbookair/Downloads/KOMPAS%20EXIM/backend/index.js`
+Total Lines: 1516
+Total Bytes: 67196
+Showing lines 1400 to 1415
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1400: });
+1401: 
+1402: function generateDNNumber() {
+1403:   const tahun = new Date().getFullYear().toString().slice(-2);
+1404:   const last = db.prepare("SELECT dn_number FROM debit_notes ORDER BY id DESC LIMIT 1").get();
+1405:   let nextNum = 1;
+1406:   if (last) {
+1407:     const match = last.dn_number.match(/DN-(\\d+)/);
+1408:     if (match) nextNum = parseInt(match[1]) + 1;
+1409:   }
+1410:   return `DN-${String(nextNum).padStart(4, '0')}-${tahun}`;
+1411: }
+1412: 
+1413: app.post('/api/debit-notes', authenticateToken, (req, res) => {
+1414:   try {
+1415:     const { import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id, mata_uang, tanggal_dn } = req.body;
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.
+
+
+---NEXT---
+
+Created At: 2026-07-23T09:34:38Z
+Completed At: 2026-07-23T09:34:38Z
+File Path: `file:///Users/macbookair/Downloads/KOMPAS%20EXIM/backend/index.js`
+Total Lines: 1516
+Total Bytes: 67196
+Showing lines 1400 to 1430
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1400: });
+1401: 
+1402: function generateDNNumber() {
+1403:   const tahun = new Date().getFullYear().toString().slice(-2);
+1404:   const last = db.prepare("SELECT dn_number FROM debit_notes ORDER BY id DESC LIMIT 1").get();
+1405:   let nextNum = 1;
+1406:   if (last) {
+1407:     const match = last.dn_number.match(/DN-(\\d+)/);
+1408:     if (match) nextNum = parseInt(match[1]) + 1;
+1409:   }
+1410:   return `DN-${String(nextNum).padStart(4, '0')}-${tahun}`;
+1411: }
+1412: 
+1413: app.post('/api/debit-notes', authenticateToken, (req, res) => {
+1414:   try {
+1415:     const { import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id, mata_uang, tanggal_dn } = req.body;
+1416:     const dn_number = generateDNNumber();
+1417:     const departemen = req.user.departemen || 'Import';
+1418: 
+1419:     let newId;
+1420:     db.transaction(() => {
+1421:       db.prepare(`
+1422:         INSERT INTO debit_notes (dn_number, import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id, mata_uang, departemen, dibuat_oleh_id, tanggal_dn)
+1423:         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+1424:       `).run(dn_number, import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id || null, mata_uang || 'IDR', departemen, req.user.id, tanggal_dn || new Date().toISOString().split('T')[0]);
+1425:       
+1426:       newId = db.prepare('SELECT last_insert_rowid()').pluck().get();
+1427:       db.prepare('INSERT INTO debit_note_status_history (debit_note_id, status_ke, catatan, diubah_oleh_id) VALUES (?, ?, ?, ?)').run(newId, 'Draft', 'Debit note dibuat', req.user.id);
+1428:     })();
+1429:     res.status(201).json({ success: true, id: newId });
+1430:   } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.
+
+
+---NEXT---
+
+Created At: 2026-07-23T09:47:02Z
+Tool is running as a background task with task id: 0987f684-a702-45ee-a464-e4140a7932a0/task-8270
+Task Description: grep -C 50 "app.post('/api/debit-notes'" /Users/macbookair/.gemini/antigravity-ide/brain/0987f684-a702-45ee-a464-e4140a7932a0/.system_generated/logs/transcript_full.jsonl > recovered_routes.txt
+Task logs are available at: file:///Users/macbookair/.gemini/antigravity-ide/brain/0987f684-a702-45ee-a464-e4140a7932a0/.system_generated/tasks/task-8270.log
+
+---NEXT---
+
+Created At: 2026-07-23T09:47:12Z
+Completed At: 2026-07-23T09:47:12Z
+
+				The command completed successfully.
+				Output:
+				<truncated 2 lines>
+app.post('/api/debit-notes', authenticateToken, (req, res) => {\n[diff_block_end]\n\nPlease note that the above snippet only shows the MODIFIED lines from the last change. It shows up to 3 lines of unchanged lines before and after the modified lines. The actual file contents may have many more lines not shown."}
+app.post('/api/debit-notes'","SearchPath":"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js","toolAction":"Check backend route","toolSummary":"Check backend route"}}]}
+app.post('/api/debit-notes', authenticateToken, (req, res) =\\u003e {\"}"}
+app.post('/api/debit-notes', authenticateToken, (req, res) =\\u003e {\"}\n{\"File\":\"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js\",\"LineNumber\":1433,\"LineContent\":\"app.patch('/api/debit-notes/:id', authenticateToken, (req, res) =\\u003e {\"}\n{\"File\":\"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js\",\"LineNumber\":1453,\"LineContent\":\"app.patch('/api/debit-notes/:id/status', authenticateToken, (req, res) =\\u003e {\"}\n{\"File\":\"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js\",\"LineNumber\":1473,\"LineContent\":\"app.patch('/api/debit-notes/:id/recovery', authenticateToken, (req, res) =\\u003e {\"}\n{\"File\":\"/Users/macbookair/Downloads/KOMPAS EXIM/backend/index.js\",\"LineNumber\":1481,\"LineContent\":\"app.delete('/api/debit-notes/:id', authenticateToken, (req, res) =\\u003e {\"}"}
+app.post('/api/debit-notes', authenticateToken, (req, res) => {\n1414:   try {\n1415:     const { import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id, mata_uang, tanggal_dn } = req.body;\nThe above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.\n"}
+app.post('/api/debit-notes', authenticateToken, (req, res) => {\n1414:   try {\n1415:     const { import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id, mata_uang, tanggal_dn } = req.body;\n1416:     const dn_number = generateDNNumber();\n1417:     const departemen = req.user.departemen || 'Import';\n1418: \n1419:     let newId;\n1420:     db.transaction(() => {\n1421:       db.prepare(`\n1422:         INSERT INTO debit_notes (dn_number, import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id, mata_uang, departemen, dibuat_oleh_id, tanggal_dn)\n1423:         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n1424:       `).run(dn_number, import_project_id, claim_kategori, claim_jenis, claim_kepada, jumlah_klaim, deskripsi, linked_job_order_id || null, mata_uang || 'IDR', departemen, req.user.id, tanggal_dn || new Date().toISOString().split('T')[0]);\n1425:       \n1426:       newId = db.prepare('SELECT last_insert_rowid()').pluck().get();\n1427:       db.prepare('INSERT INTO debit_note_status_history (debit_note_id, status_ke, catatan, diubah_oleh_id) VALUES (?, ?, ?, ?)').run(newId, 'Draft', 'Debit note dibuat', req.user.id);\n1428:     })();\n1429:     res.status(201).json({ success: true, id: newId });\n1430:   } catch (error) { console.error(error); res.status(500).json({ error: error.message }); }\nThe above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.\n"}
+

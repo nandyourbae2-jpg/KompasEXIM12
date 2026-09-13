@@ -32,20 +32,37 @@ const PaymentBadge = ({ shipmentId, categoryKey }) => {
   const label = jo.sumber === 'terputus' ? 'Terputus' : jo.status;
 
   return (
-    <span style={{
-      display: 'inline-block',
-      marginLeft: '8px',
-      padding: '2px 8px',
-      borderRadius: 'var(--rounded-xs)',
-      fontSize: '10px',
-      fontWeight: '700',
-      backgroundColor: bg,
-      color: color,
-      textTransform: 'uppercase',
-      letterSpacing: '0.5px'
-    }}>
-      {label}
-    </span>
+    <>
+      <span style={{
+        display: 'inline-block',
+        marginLeft: '8px',
+        padding: '2px 8px',
+        borderRadius: 'var(--rounded-xs)',
+        fontSize: '10px',
+        fontWeight: '700',
+        backgroundColor: bg,
+        color: color,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
+      }}>
+        {label}
+      </span>
+      {jo.financial_request_number && (
+        <span style={{
+          display: 'inline-block',
+          marginLeft: '4px',
+          padding: '2px 8px',
+          borderRadius: 'var(--rounded-xs)',
+          fontSize: '10px',
+          fontWeight: '700',
+          backgroundColor: '#FFFBEB',
+          color: '#D97706',
+          border: '1px solid #FDE68A',
+        }} title="Terkait dengan Pengajuan Biaya (Financial Request)">
+          {jo.financial_request_number}
+        </span>
+      )}
+    </>
   );
 };
 

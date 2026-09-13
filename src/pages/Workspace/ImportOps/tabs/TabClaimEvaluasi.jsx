@@ -1,8 +1,18 @@
 import React from 'react';
+import VendorSelect from '../../../../components/VendorSelect';
 import CostSection from '../../../../components/CostSection';
 import CostRollup from '../../../../components/CostRollup';
 import PaymentBadge from '../../../../components/PaymentBadge';
 import { fmtRupiah } from '../../../../utils/importCalc';
+import Button from '../../../../components/Button';
+import DebitNoteFormModal from '../../Finance/DebitNote/components/DebitNoteFormModal';
+import { Plus } from 'lucide-react';
+
+const CLAIM_JENIS = {
+  'Claim Supplier': ['Manufacturing Defect', 'Shortage (Kekurangan Barang)', 'Document Discrepancy', 'Quality Issue', 'Lainnya'],
+  'Claim Liner/FWD': ['Transit Damage', 'Keterlambatan Pengapalan', 'Keterlambatan Transit', 'Overcharging', 'Bill of Lading Error', 'Lainnya'],
+  'Claim Trucking': ['Demurrage & Detention', 'Road Transit Damage', 'Kerusakan Segel', 'Keterlambatan Pengiriman', 'Lainnya']
+};
 
 const Grid = ({ children }) => (
   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
@@ -23,8 +33,23 @@ const Grid5 = ({ children }) => (
 );
 
 
-const TabClaimEvaluasi = ({ shipmentId, costs, updateCost, totals, qtty }) => {
+const TabClaimEvaluasi = ({ shipmentId, importProjectId, costs, updateCost, totals, qtty }) => {
   const up = (cat, field, val) => updateCost(cat, field, val);
+  
+  const [isDnModalOpen, setIsDnModalOpen] = React.useState(false);
+  const [dnInitialData, setDnInitialData] = React.useState(null);
+
+  const handleOpenDnModal = (kategori, costData) => {
+    setDnInitialData({
+      import_project_id: importProjectId || '',
+      claim_kategori: kategori,
+      claim_jenis: costData.jenis_klaim || CLAIM_JENIS[kategori][0],
+      claim_kepada: costData.vendorName || '',
+      jumlah_klaim: costData.amount || '',
+      deskripsi: costData.detail || ''
+    });
+    setIsDnModalOpen(true);
+  };
 
   const inputSt = {
     width: '100%', padding: '9px 12px',
@@ -43,44 +68,62 @@ const TabClaimEvaluasi = ({ shipmentId, costs, updateCost, totals, qtty }) => {
   return (
     <>
       <CostSection title="CLAIM" total={totals.claim.total} totalLabel="Total Claim Amount">
-        <Grid>
-          <div><label style={labelSt}>Claim Supplier Vendor</label><input type="text" value={costs.claimSupplier.vendorName} onChange={e => up('claimSupplier', 'vendorName', e.target.value)} style={inputSt} /></div>
-          <div><label style={labelSt}>Claim Supplier Detail <PaymentBadge shipmentId={shipmentId} categoryKey="claimSupplier" /></label><input type="text" value={costs.claimSupplier.detail} onChange={e => up('claimSupplier', 'detail', e.target.value)} style={inputSt} /></div>
+        <Grid5>
+          <div>
+            <label style={labelSt}>Jenis Klaim</label>
+            <select value={costs.claimSupplier.jenis_klaim || ''} onChange={e => up('claimSupplier', 'jenis_klaim', e.target.value)} style={inputSt}>
+              <option value="">-- Pilih Jenis --</option>
+              {CLAIM_JENIS['Claim Supplier'].map(j => <option key={j} value={j}>{j}</option>)}
+            </select>
+          </div>
+          <div><label style={labelSt}>Diklaim Kepada (Vendor)</label><VendorSelect value={costs.claimSupplier.vendorName} onChange={val => up('claimSupplier', 'vendorName', val)} style={inputSt} /></div>
+          <div><label style={labelSt}>Detail Kronologi</label><input type="text" value={costs.claimSupplier.detail} onChange={e => up('claimSupplier', 'detail', e.target.value)} style={inputSt} /></div>
           <div><label style={labelSt}>Amount (IDR)</label><input type="number" value={costs.claimSupplier.amount} onChange={e => up('claimSupplier', 'amount', e.target.value)} style={inputSt} /></div>
           <div>
-            <label style={labelSt}>Status Klaim</label>
-            <select value={costs.claimSupplier.status_klaim || 'Belum Diterima'} onChange={e => up('claimSupplier', 'status_klaim', e.target.value)} style={inputSt}>
-              <option value="Belum Diterima">Belum Diterima</option>
-              <option value="Diterima">Diterima</option>
+            <label style={{...labelSt, color: 'transparent'}}>Aksi</label>
+            <Button variant="secondary" style={{ width: '100%', padding: '8px' }} onClick={() => handleOpenDnModal('Claim Supplier', costs.claimSupplier)} disabled={!costs.claimSupplier.jenis_klaim || !costs.claimSupplier.amount}>
+              <Plus size={14} /> Buat Debit Note
+            </Button>
+          </div>
+        </Grid5>
+        <div style={{ margin: '16px 0' }} />
+        <Grid5>
+          <div>
+            <label style={labelSt}>Jenis Klaim</label>
+            <select value={costs.claimLinerFwd.jenis_klaim || ''} onChange={e => up('claimLinerFwd', 'jenis_klaim', e.target.value)} style={inputSt}>
+              <option value="">-- Pilih Jenis --</option>
+              {CLAIM_JENIS['Claim Liner/FWD'].map(j => <option key={j} value={j}>{j}</option>)}
             </select>
           </div>
-        </Grid>
-        <div style={{ margin: '16px 0' }} />
-        <Grid>
-          <div><label style={labelSt}>Claim Liner/FWD Vendor</label><input type="text" value={costs.claimLinerFwd.vendorName} onChange={e => up('claimLinerFwd', 'vendorName', e.target.value)} style={inputSt} /></div>
-          <div><label style={labelSt}>Claim Liner/FWD Detail <PaymentBadge shipmentId={shipmentId} categoryKey="claimLinerFwd" /></label><input type="text" value={costs.claimLinerFwd.detail} onChange={e => up('claimLinerFwd', 'detail', e.target.value)} style={inputSt} /></div>
+          <div><label style={labelSt}>Diklaim Kepada (Vendor)</label><VendorSelect value={costs.claimLinerFwd.vendorName} onChange={val => up('claimLinerFwd', 'vendorName', val)} style={inputSt} /></div>
+          <div><label style={labelSt}>Detail Kronologi</label><input type="text" value={costs.claimLinerFwd.detail} onChange={e => up('claimLinerFwd', 'detail', e.target.value)} style={inputSt} /></div>
           <div><label style={labelSt}>Amount (IDR)</label><input type="number" value={costs.claimLinerFwd.amount} onChange={e => up('claimLinerFwd', 'amount', e.target.value)} style={inputSt} /></div>
           <div>
-            <label style={labelSt}>Status Klaim</label>
-            <select value={costs.claimLinerFwd.status_klaim || 'Belum Diterima'} onChange={e => up('claimLinerFwd', 'status_klaim', e.target.value)} style={inputSt}>
-              <option value="Belum Diterima">Belum Diterima</option>
-              <option value="Diterima">Diterima</option>
+            <label style={{...labelSt, color: 'transparent'}}>Aksi</label>
+            <Button variant="secondary" style={{ width: '100%', padding: '8px' }} onClick={() => handleOpenDnModal('Claim Liner/FWD', costs.claimLinerFwd)} disabled={!costs.claimLinerFwd.jenis_klaim || !costs.claimLinerFwd.amount}>
+              <Plus size={14} /> Buat Debit Note
+            </Button>
+          </div>
+        </Grid5>
+        <div style={{ margin: '16px 0' }} />
+        <Grid5>
+          <div>
+            <label style={labelSt}>Jenis Klaim</label>
+            <select value={costs.claimTrucking.jenis_klaim || ''} onChange={e => up('claimTrucking', 'jenis_klaim', e.target.value)} style={inputSt}>
+              <option value="">-- Pilih Jenis --</option>
+              {CLAIM_JENIS['Claim Trucking'].map(j => <option key={j} value={j}>{j}</option>)}
             </select>
           </div>
-        </Grid>
-        <div style={{ margin: '16px 0' }} />
-        <Grid>
-          <div><label style={labelSt}>Claim Trucking Vendor</label><input type="text" value={costs.claimTrucking.vendorName} onChange={e => up('claimTrucking', 'vendorName', e.target.value)} style={inputSt} /></div>
-          <div><label style={labelSt}>Claim Trucking Detail <PaymentBadge shipmentId={shipmentId} categoryKey="claimTrucking" /></label><input type="text" value={costs.claimTrucking.detail} onChange={e => up('claimTrucking', 'detail', e.target.value)} style={inputSt} /></div>
+          <div><label style={labelSt}>Diklaim Kepada (Vendor)</label><VendorSelect value={costs.claimTrucking.vendorName} onChange={val => up('claimTrucking', 'vendorName', val)} style={inputSt} /></div>
+          <div><label style={labelSt}>Detail Kronologi</label><input type="text" value={costs.claimTrucking.detail} onChange={e => up('claimTrucking', 'detail', e.target.value)} style={inputSt} /></div>
           <div><label style={labelSt}>Amount (IDR)</label><input type="number" value={costs.claimTrucking.amount} onChange={e => up('claimTrucking', 'amount', e.target.value)} style={inputSt} /></div>
           <div>
-            <label style={labelSt}>Status Klaim</label>
-            <select value={costs.claimTrucking.status_klaim || 'Belum Diterima'} onChange={e => up('claimTrucking', 'status_klaim', e.target.value)} style={inputSt}>
-              <option value="Belum Diterima">Belum Diterima</option>
-              <option value="Diterima">Diterima</option>
-            </select>
+            <label style={{...labelSt, color: 'transparent'}}>Aksi</label>
+            <Button variant="secondary" style={{ width: '100%', padding: '8px' }} onClick={() => handleOpenDnModal('Claim Trucking', costs.claimTrucking)} disabled={!costs.claimTrucking.jenis_klaim || !costs.claimTrucking.amount}>
+              <Plus size={14} /> Buat Debit Note
+            </Button>
           </div>
-        </Grid>
+        </Grid5>
       </CostSection>
 
       <CostRollup label="TOTAL BEBAN PBN / KG" value={totals.claim.bebanPbnKg} hint={`Beban PBN (Rp ${fmtRupiah(totals.claim.bebanPbn)}) / Qtty (${qtty})`} />
@@ -119,6 +162,11 @@ const TabClaimEvaluasi = ({ shipmentId, costs, updateCost, totals, qtty }) => {
           <div><label style={labelSt}>No. Kawalan</label><input type="text" value={costs.opCostEval.noKawalan} onChange={e => up('opCostEval', 'noKawalan', e.target.value)} style={inputSt} /></div>
         </Grid5>
       </CostSection>
+      <DebitNoteFormModal 
+        isOpen={isDnModalOpen} 
+        onClose={() => setIsDnModalOpen(false)} 
+        initialData={dnInitialData} 
+      />
     </>
   );
 };

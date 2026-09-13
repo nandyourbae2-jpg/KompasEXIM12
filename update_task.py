@@ -1,15 +1,11 @@
-import re
-with open('/Users/macbookair/.gemini/antigravity-ide/brain/e8fea363-9f36-4088-8942-b3ede6d89268/task.md', 'r') as f:
+file_path = "/Users/macbookair/.gemini/antigravity-ide/brain/fd52c19a-ead8-476d-b343-77dc9eb1d7cf/task.md"
+with open(file_path, "r") as f:
     content = f.read()
 
-content = content.replace("- `[/]` 1", "- `[x]` 1")
-for i in range(2, 10):
-    content = content.replace(f"- `[ ]` {i}.", f"- `[x]` {i}.")
-content = content.replace("- `[ ]` TaskCard", "- `[x]` TaskCard")
-content = content.replace("- `[ ]` TaskMap", "- `[x]` TaskMap")
-content = content.replace("- `[ ]` AssignTaskModal", "- `[x]` AssignTaskModal")
-content = content.replace("- `[ ]` ImportSupervisorDashboard", "- `[x]` ImportSupervisorDashboard")
-content = content.replace("- `[ ]` 10", "- `[/]` 10")
+content = content.replace("`[ ]` Implement `AeChecklistRuleEngine` to evaluate deterministic JSON rules", "`[x]` Implement `AeChecklistRuleEngine` to evaluate deterministic JSON rules")
+content = content.replace("`[ ]` `POST /api/v2/ae/jobs/:id/checklist/generate` (Rule evaluation and instantiation)", "`[x]` `POST /api/v2/ae/jobs/:id/checklist/generate` (Rule evaluation and instantiation)")
+content = content.replace("`[ ]` `GET /api/v2/ae/jobs/:id/checklist` (Fetch instantiated checklist and progress)", "`[x]` `GET /api/v2/ae/jobs/:id/checklist` (Fetch instantiated checklist and progress)")
+content = content.replace("`[ ]` `PATCH /api/v2/ae/jobs/:id/checklist/items/:itemId` (Update status/remarks/audit)", "`[x]` `PATCH /api/v2/ae/jobs/:id/checklist/items/:itemId` (Update status/remarks/audit)")
 
-with open('/Users/macbookair/.gemini/antigravity-ide/brain/e8fea363-9f36-4088-8942-b3ede6d89268/task.md', 'w') as f:
+with open(file_path, "w") as f:
     f.write(content)

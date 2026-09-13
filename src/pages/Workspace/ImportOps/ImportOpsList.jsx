@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Ship, Plus, ChevronRight, AlertTriangle, Trash2 } from 'lucide-react';
+import { Ship, Plus, ChevronRight, AlertTriangle, Trash2, AlertCircle, Package } from 'lucide-react';
 import useImportOperationalStore from '../../../store/useImportOperationalStore';
 import useImportProjectStore from '../../../store/useImportProjectStore';
 import useAuthStore from '../../../store/useAuthStore';
+import { useFormSubmit } from '../../../hooks/useFormSubmit';
 import { calcTotals, fmtRupiah } from '../../../utils/importCalc';
 
 // ─── Konstanta ────────────────────────────────────────────────────────────────
@@ -87,27 +88,32 @@ const AddShipmentModal = ({ onClose }) => {
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [form, setFormState] = useState(emptyForm);
   const [error, setError] = useState('');
+  const idempotencyKeyRef = useRef('');
+
+  useEffect(() => {
+    idempotencyKeyRef.current = crypto.randomUUID();
+  }, []);
 
   const setField = (field, val) => setFormState(prev => ({ ...prev, [field]: val }));
 
   const handleSelectProject = (projectId) => {
     setSelectedProjectId(projectId);
     if (!projectId) return;
-    const project = importProjects.find(p => p.id === projectId);
+    const project = importProjects.find(p => String(p.id) === String(projectId));
     if (!project) return;
     setFormState(prev => ({
       ...prev,
-      un: project.id,
-      kat: importTypeToKat(project.importType),
+      un: project.taskUniqueNumber || project.task_unique_number || String(project.id),
+      kat: importTypeToKat(project.import_type || project.importType),
       supplier: project.supplier,
       trade: project.trade || '',
-      shipmentTerm: project.shipmentTerm || '',
-      inv: project.invoiceNo || '',
-      blSwbAwb: project.billOfLadingNo || '',
+      shipmentTerm: project.shipment_term || project.shipmentTerm || '',
+      inv: project.invoice_no || project.invoiceNo || '',
+      blSwbAwb: project.bl_no || project.billOfLadingNo || '',
       etd: project.etd || '',
       eta: project.eta || '',
-      hsCode: project.hsCode || '',
-      freeTimeDest: project.freeTimeDestination || '',
+      hsCode: project.hs_code || project.hsCode || '',
+      freeTimeDest: project.free_time_destination || project.freeTimeDestination || '',
       importProjectId: project.id,
     }));
   };
@@ -119,15 +125,23 @@ const AddShipmentModal = ({ onClose }) => {
     setError('');
   };
 
-  const handleSubmit = () => {
-    if (!form.un.trim()) { setError('Kode UN wajib diisi'); return; }
-    if (!form.supplier)  { setError('Supplier wajib dipilih'); return; }
-    if (!form.inv.trim()) { setError('Invoice Number wajib diisi'); return; }
+  const { handleSubmit, loading: submitting, error: submitError, fieldErrors, setFieldErrors } = useFormSubmit(
+    async () => {
+      if (!form.un.trim() || !form.supplier || !form.inv.trim()) {
+        setFieldErrors({
+          un: !form.un.trim() ? 'Wajib' : null,
+          supplier: !form.supplier ? 'Wajib' : null,
+          inv: !form.inv.trim() ? 'Wajib' : null,
+        });
+        throw new Error('Mohon lengkapi field wajib (UN, Supplier, Invoice)');
+      }
 
-    const shipment = addShipment({ ...form, createdById: user?.id || null });
-    onClose();
-    navigate(`/workspace/import-operational/${shipment.id}`);
-  };
+      const shipment = await addShipment({ ...form, createdById: user?.id || null, idempotencyKey: idempotencyKeyRef.current });
+      idempotencyKeyRef.current = crypto.randomUUID(); // Reset for next create action
+      onClose();
+      navigate(`/workspace/import-operational/${shipment.id}`);
+    }
+  );
 
   const inputSt = {
     width: '100%', padding: '9px 12px',
@@ -243,9 +257,10 @@ const AddShipmentModal = ({ onClose }) => {
               </div>
             </div>
 
-            {error && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--color-status-danger-bg)', border: '1px solid var(--color-status-danger)', color: 'var(--color-status-danger)', padding: '8px 12px', borderRadius: 'var(--rounded-sm)', fontSize: '13px' }}>
-                <AlertTriangle size={14} />{error}
+            {(error || submitError) && (
+              <div style={{ backgroundColor: '#fff1f1', color: '#d32f2f', padding: '12px 16px', borderRadius: '6px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertCircle size={16} />
+                {error || submitError}
               </div>
             )}
 
@@ -253,11 +268,16 @@ const AddShipmentModal = ({ onClose }) => {
               <div>
                 <label style={labelSt}>Pilih Import Project <span style={{ color: 'var(--color-status-danger)' }}>*</span></label>
                 <select value={selectedProjectId} onChange={e => handleSelectProject(e.target.value)}
-                  style={{ ...inputSt, borderColor: selectedProjectId ? 'var(--color-primary)' : 'var(--color-hairline)' }} autoFocus>
+                  style={{ ...inputSt, borderColor: selectedProjectId ? 'var(--color-primary)' : 'var(--color-hairline)' }} autoFocus
+                  onFocus={e => e.target.size = Math.min(10, importProjects.length + 1)}
+                  onBlur={e => e.target.size = 0}
+                  onChangeCapture={e => e.target.size = 0}>
                   <option value="">— Pilih IMP-XXXX —</option>
-                  {importProjects.map(p => (
-                    <option key={p.id} value={p.id}>{p.id} — {p.supplier} ({p.importType})</option>
-                  ))}
+                  {importProjects.map(p => {
+                    const displayId = p.taskUniqueNumber || p.task_unique_number || String(p.id);
+                    const importType = p.import_type || p.importType || 'Unknown';
+                    return <option key={p.id} value={p.id}>{displayId} — {p.supplier} ({importType})</option>;
+                  })}
                 </select>
                 {selectedProjectId && (
                   <div style={{ fontSize: '12px', color: 'var(--color-primary)', marginTop: '6px' }}>
@@ -269,7 +289,7 @@ const AddShipmentModal = ({ onClose }) => {
 
             {isFromProject && selectedProjectId && (
               <div style={{ backgroundColor: 'var(--color-status-info-bg)', border: '1px solid var(--color-status-info)', borderRadius: 'var(--rounded-md)', padding: '10px 14px', fontSize: '12px', color: 'var(--color-primary)' }}>
-                Field berwarna biru = diisi otomatis dari <strong>{selectedProjectId}</strong>. Field putih = wajib diisi manual.
+                Field berwarna biru = diisi otomatis dari <strong>{form.un}</strong>. Field putih = wajib diisi manual.
               </div>
             )}
 
@@ -279,7 +299,7 @@ const AddShipmentModal = ({ onClose }) => {
                 <label style={labelSt}>Kode UN <span style={{ color: 'var(--color-status-danger)' }}>*</span></label>
                 <input type="text" value={form.un} onChange={e => setField('un', e.target.value)}
                   placeholder={isFromProject ? 'IMP-XXXX (dari project)' : 'mis. UN-001'}
-                  style={hasProjectSelected ? autoFilledSt : inputSt}
+                  style={{... (hasProjectSelected ? autoFilledSt : inputSt), border: fieldErrors?.un ? '1px solid var(--color-status-danger)' : (hasProjectSelected ? autoFilledSt.borderColor : inputSt.borderColor) }}
                   readOnly={isFromProject && !!selectedProjectId} />
               </div>
 
@@ -294,8 +314,11 @@ const AddShipmentModal = ({ onClose }) => {
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={labelSt}>Supplier <span style={{ color: 'var(--color-status-danger)' }}>*</span></label>
                 <select value={form.supplier} onChange={e => setField('supplier', e.target.value)}
-                  style={hasProjectSelected ? autoFilledSt : inputSt}>
+                  style={{... (hasProjectSelected ? autoFilledSt : inputSt), border: fieldErrors?.supplier ? '1px solid var(--color-status-danger)' : (hasProjectSelected ? autoFilledSt.borderColor : inputSt.borderColor) }}>
                   <option value="">— Pilih Supplier —</option>
+                  {form.supplier && !masterData.suppliers.includes(form.supplier) && (
+                    <option value={form.supplier}>{form.supplier}</option>
+                  )}
                   {masterData.suppliers.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
@@ -315,7 +338,7 @@ const AddShipmentModal = ({ onClose }) => {
               <div>
                 <label style={labelSt}>Invoice No. <span style={{ color: 'var(--color-status-danger)' }}>*</span></label>
                 <input type="text" value={form.inv} onChange={e => setField('inv', e.target.value)}
-                  placeholder="mis. INV-2026-0001" style={hasProjectSelected ? autoFilledSt : inputSt} />
+                  placeholder="mis. INV-2026-0001" style={{... (hasProjectSelected ? autoFilledSt : inputSt), border: fieldErrors?.inv ? '1px solid var(--color-status-danger)' : (hasProjectSelected ? autoFilledSt.borderColor : inputSt.borderColor) }} />
               </div>
 
               <div>
@@ -407,9 +430,9 @@ const AddShipmentModal = ({ onClose }) => {
                 Batal
               </button>
               <button onClick={handleSubmit}
-                disabled={isFromProject && !selectedProjectId}
-                style={{ padding: '10px 20px', borderRadius: 'var(--rounded-pill)', border: 'none', backgroundColor: isFromProject && !selectedProjectId ? 'var(--color-ink-muted-48)' : 'var(--color-primary)', color: '#fff', cursor: isFromProject && !selectedProjectId ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '600', fontFamily: 'var(--font-family-body)' }}>
-                Buat & Buka Detail
+                disabled={submitting || (isFromProject && !selectedProjectId)}
+                style={{ padding: '10px 20px', borderRadius: 'var(--rounded-pill)', border: 'none', backgroundColor: (submitting || (isFromProject && !selectedProjectId)) ? 'var(--color-ink-muted-48)' : 'var(--color-primary)', color: '#fff', cursor: (submitting || (isFromProject && !selectedProjectId)) ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '600', fontFamily: 'var(--font-family-body)' }}>
+                {submitting ? 'Membuat Shipment...' : 'Buat & Buka Detail'}
               </button>
             </div>
           </>
@@ -422,10 +445,14 @@ const AddShipmentModal = ({ onClose }) => {
 // ─── Main: ImportOpsList ──────────────────────────────────────────────────────
 
 const ImportOpsList = () => {
-  const { shipments, deleteShipment } = useImportOperationalStore();
+  const { shipments, shipmentPagination, deleteShipment, fetchShipments, fetchShipmentsPage } = useImportOperationalStore();
   const navigate = useNavigate();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  React.useEffect(() => {
+    fetchShipments(1);
+  }, [fetchShipments]);
 
   const formatDate = (iso) => {
     if (!iso) return '—';
@@ -434,10 +461,8 @@ const ImportOpsList = () => {
     });
   };
 
-  // Sort: terbaru di atas
-  const sorted = [...shipments].sort((a, b) =>
-    new Date(b.createdAt) - new Date(a.createdAt)
-  );
+  // Backend already returns data sorted by created_at DESC
+  const sorted = shipments;
 
   const handleDelete = (id) => {
     deleteShipment(id);
@@ -470,7 +495,7 @@ const ImportOpsList = () => {
             </h1>
           </div>
           <p style={{ fontSize: '13px', color: 'var(--color-ink-muted-48)', marginLeft: '48px' }}>
-            Monitoring landed cost & operasional shipment import · {sorted.length} shipment
+            Monitoring landed cost & operasional shipment import · {shipmentPagination.total} shipment
           </p>
         </div>
         <button
@@ -513,18 +538,20 @@ const ImportOpsList = () => {
               </div>
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ maxHeight: '500px', overflow: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ backgroundColor: 'var(--color-canvas-parchment)' }}>
-                    {['ID', 'UN', 'Kat', 'Supplier', 'Invoice', 'ETA', 'Mode', 'Kontainer', 'Gudang', 'Grand Total (+Tax)', 'Landed/Kg', ''].map(h => (
+                    {['ID', 'UN', 'Kat', 'Supplier', 'Invoice', 'ETA', 'Mode', 'Qtty', 'Gudang', 'Grand Total (+Tax)', 'Landed/Kg', ''].map(h => (
                       <th key={h} style={{
+                        position: 'sticky', top: 0, zIndex: 10, backgroundColor: 'var(--color-canvas-parchment)',
                         padding: '10px 14px', textAlign: 'left',
                         fontSize: '11px', fontWeight: '600',
                         color: 'var(--color-ink-muted-48)',
                         textTransform: 'uppercase', letterSpacing: '0.5px',
                         whiteSpace: 'nowrap',
                         borderBottom: '1px solid var(--color-hairline)',
+                        boxShadow: '0 1px 0 var(--color-hairline)',
                       }}>
                         {h}
                       </th>
@@ -533,7 +560,7 @@ const ImportOpsList = () => {
                 </thead>
                 <tbody>
                   {sorted.map((s, idx) => {
-                    const totals = calcTotals(s.costs, s.qtty);
+                    const totals = calcTotals(typeof s.costs === 'string' ? JSON.parse(s.costs || '{}') : s.costs, s.qtty, s.container_costs || []);
                     const isOdd = idx % 2 === 1;
                     return (
                       <tr
@@ -547,10 +574,10 @@ const ImportOpsList = () => {
                         onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--color-status-info-bg)'}
                         onMouseLeave={e => e.currentTarget.style.backgroundColor = isOdd ? 'var(--color-canvas-parchment)' : 'var(--color-canvas)'}
                       >
-                        {/* ID */}
+                        {/* ID (Index Iterasi) */}
                         <td style={{ padding: '13px 14px', whiteSpace: 'nowrap' }}>
                           <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--color-primary)' }}>
-                            {s.id}
+                            {idx + 1}
                           </span>
                         </td>
                         {/* UN */}
@@ -577,11 +604,9 @@ const ImportOpsList = () => {
                         <td style={{ padding: '13px 14px', whiteSpace: 'nowrap' }}>
                           <ModeBadge mode={s.modeTransport} />
                         </td>
-                        {/* Kontainer */}
-                        <td style={{ padding: '13px 14px', color: 'var(--color-ink-muted-80)', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                          {s.containers?.length > 1 
-                            ? `${s.containers.length} Kontainer` 
-                            : (s.containers?.[0]?.cont || '—')}
+                        {/* Qtty */}
+                        <td style={{ padding: '13px 14px', color: 'var(--color-ink)', whiteSpace: 'nowrap', fontWeight: '500' }}>
+                          {s.qtty ? `${fmtRupiah(s.qtty)} ${s.uom || s.qttyUom || 'Kg'}` : '—'}
                         </td>
                         {/* Gudang */}
                         <td style={{ padding: '13px 14px', color: 'var(--color-ink-muted-80)', whiteSpace: 'nowrap' }}>
@@ -597,7 +622,6 @@ const ImportOpsList = () => {
                             <span style={{ color: 'var(--color-ink-muted-48)' }}>—</span>
                           )}
                         </td>
-                        {/* Landed/Kg */}
                         <td style={{ padding: '13px 14px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                           {totals.landedPerKg > 0 ? (
                             <span style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)' }}>
@@ -659,6 +683,47 @@ const ImportOpsList = () => {
           )}
         </div>
       </div>
+
+      {/* Pagination Controls */}
+      {shipmentPagination.totalPages > 1 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '14px 32px',
+          borderTop: '1px solid var(--color-hairline)',
+          backgroundColor: 'var(--color-canvas)',
+          flexShrink: 0,
+        }}>
+          <span style={{ fontSize: '13px', color: 'var(--color-ink-muted-48)' }}>
+            Halaman {shipmentPagination.page} dari {shipmentPagination.totalPages} · {shipmentPagination.total} total shipment
+          </span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              disabled={shipmentPagination.page <= 1}
+              onClick={() => fetchShipmentsPage(shipmentPagination.page - 1)}
+              style={{
+                padding: '7px 16px', borderRadius: 'var(--rounded-pill)',
+                border: '1px solid var(--color-hairline)',
+                backgroundColor: shipmentPagination.page <= 1 ? 'var(--color-canvas-parchment)' : 'var(--color-canvas)',
+                color: shipmentPagination.page <= 1 ? 'var(--color-ink-muted-48)' : 'var(--color-ink)',
+                cursor: shipmentPagination.page <= 1 ? 'not-allowed' : 'pointer',
+                fontSize: '13px', fontFamily: 'var(--font-family-body)',
+              }}
+            >← Sebelumnya</button>
+            <button
+              disabled={shipmentPagination.page >= shipmentPagination.totalPages}
+              onClick={() => fetchShipmentsPage(shipmentPagination.page + 1)}
+              style={{
+                padding: '7px 16px', borderRadius: 'var(--rounded-pill)',
+                border: '1px solid var(--color-hairline)',
+                backgroundColor: shipmentPagination.page >= shipmentPagination.totalPages ? 'var(--color-canvas-parchment)' : 'var(--color-canvas)',
+                color: shipmentPagination.page >= shipmentPagination.totalPages ? 'var(--color-ink-muted-48)' : 'var(--color-ink)',
+                cursor: shipmentPagination.page >= shipmentPagination.totalPages ? 'not-allowed' : 'pointer',
+                fontSize: '13px', fontFamily: 'var(--font-family-body)',
+              }}
+            >Berikutnya →</button>
+          </div>
+        </div>
+      )}
 
       {/* Modal Tambah */}
       {isAddOpen && <AddShipmentModal onClose={() => setIsAddOpen(false)} />}

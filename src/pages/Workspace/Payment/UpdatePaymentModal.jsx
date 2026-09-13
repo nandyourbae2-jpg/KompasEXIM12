@@ -12,8 +12,7 @@ const UpdatePaymentModal = ({ joId, onClose }) => {
   const jo = jobOrders.find(j => j.id === joId);
   const [amountStr, setAmountStr] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('Bank Transfer');
-  const [fileMock, setFileMock] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState('Termin Payment');
   const [formError, setFormError] = useState('');
 
   if (!jo) return null;
@@ -28,7 +27,7 @@ const UpdatePaymentModal = ({ joId, onClose }) => {
     setAmountStr(formatted);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const numAmount = parseInt(amountStr.replace(/\./g, ''), 10);
     if (!numAmount || numAmount <= 0) {
       setFormError('Jumlah Bayar Baru wajib diisi dengan angka valid'); return;
@@ -39,13 +38,8 @@ const UpdatePaymentModal = ({ joId, onClose }) => {
     if (!paymentDate) {
       setFormError('Tanggal Bayar wajib diisi'); return;
     }
-    if (!fileMock) {
-      setFormError('Bukti transfer wajib diupload sebelum submit.'); return;
-    }
 
-    // Call updatePayment, but wait, updatePayment logic in store uses today date by default
-    // We should pass the custom date and method!
-    updatePayment(joId, numAmount, fileMock, user, paymentDate, paymentMethod);
+    await updatePayment(joId, numAmount, user, paymentDate, paymentMethod);
     onClose();
   };
 
@@ -110,7 +104,7 @@ const UpdatePaymentModal = ({ joId, onClose }) => {
     }
   };
 
-  const isFormValid = amountStr && paymentDate && fileMock;
+  const isFormValid = amountStr && paymentDate;
 
   return (
     <div style={styles.overlay}>
@@ -156,22 +150,15 @@ const UpdatePaymentModal = ({ joId, onClose }) => {
                 <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={styles.input} />
               </div>
               <div style={styles.inputGroup}>
-                <label style={styles.labelSmall}>Metode Pembayaran</label>
-                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} style={styles.input}>
-                  <option value="Bank Transfer">Bank Transfer</option>
-                  <option value="Petty Cash">Petty Cash</option>
+                <span style={styles.labelSmall}>Metode Pembayaran</span>
+                <select 
+                  style={styles.input}
+                  value={paymentMethod}
+                  onChange={e => setPaymentMethod(e.target.value)}
+                >
+                  <option value="Termin Payment">Termin Payment</option>
+                  <option value="COD Payment">COD Payment</option>
                 </select>
-              </div>
-            </div>
-
-            <div style={styles.inputGroup}>
-              <label style={styles.labelSmall}>Bukti Transfer *</label>
-              <div style={styles.uploadArea}>
-                <UploadCloud size={32} color="var(--color-ink-muted-48)" style={{ margin: '0 auto 12px auto' }} />
-                <div style={{ fontSize: '14px', color: 'var(--color-ink-muted-80)', fontWeight: '600' }}>
-                  {fileMock ? fileMock.name : 'Klik untuk pilih bukti transfer'}
-                </div>
-                <input type="file" onChange={e => setFileMock(e.target.files[0])} style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
               </div>
             </div>
           </>

@@ -1,19 +1,14 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, Settings, Save, Edit2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, Settings, Save, Edit2, ShieldCheck, Loader2 } from 'lucide-react';
 import useImportOperationalStore from '../../../store/useImportOperationalStore';
 import { fmtRupiah } from '../../../utils/importCalc';
+import MasterDataDokumen from './MasterDataDokumen';
+import { useAppleModal } from '../../../contexts/AppleModalContext';
 
 // ─── Truck Price Route Keys ───────────────────────────────────────────────────
 // Mapping antara depo route label → key yang dipakai di truckPrices row
-// Harus konsisten dengan initialMasterData di store
-const TRUCK_ROUTE_KEYS = [
-  { key: 'r40PBN',      label: "40' PBN" },
-  { key: 'r40CIKARANG', label: "40' CIKARANG" },
-  { key: 'r40SAMICO',   label: "40' SAMICO" },
-  { key: 'r20PBN',      label: "20' PBN" },
-  { key: 'r20CIKARANG', label: "20' CIKARANG" },
-  { key: 'r20SAMICO',   label: "20' SAMICO" },
-];
+// Kini diambil dari global state (masterData.truckRouteKeys)
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,11 +79,68 @@ const SectionCard = ({ title, children }) => (
 
 const ListDataTab = () => {
   const { masterData, addSupplier, removeSupplier, addDepoRoute, removeDepoRoute,
-          addWhRoute, removeWhRoute } = useImportOperationalStore();
+          addWhRoute, removeWhRoute, departemenList, fetchDepartemen, addDepartemen, removeDepartemen } = useImportOperationalStore();
+  const { alert: modalAlert, confirm: modalConfirm } = useAppleModal();
+
+  useEffect(() => {
+    fetchDepartemen();
+  }, [fetchDepartemen]);
 
   const [newSupplier, setNewSupplier] = useState('');
   const [newDepo, setNewDepo] = useState('');
   const [newWh, setNewWh] = useState('');
+  const [newDept, setNewDept] = useState('');
+  const [isAddingDept, setIsAddingDept] = useState(false);
+  const [deptDeletingId, setDeptDeletingId] = useState(null);
+
+  const handleAddDept = async () => {
+    const trimmed = (newDept || '').trim();
+    if (!trimmed) return;
+
+    if (departemenList.some(d => d.nama_departemen.trim().toLowerCase() === trimmed.toLowerCase())) {
+      if (modalAlert) await modalAlert(`Departemen "${trimmed}" sudah terdaftar.`);
+      else window.alert(`Departemen "${trimmed}" sudah terdaftar.`);
+      return;
+    }
+
+    setIsAddingDept(true);
+    try {
+      await addDepartemen(trimmed);
+      setNewDept('');
+    } catch (err) {
+      const msg = err.message || 'Gagal menambahkan departemen.';
+      if (modalAlert) await modalAlert(msg);
+      else window.alert(msg);
+    } finally {
+      setIsAddingDept(false);
+    }
+  };
+
+  const handleRemoveDept = async (dept) => {
+    const isCore = ['import', 'export', 'account officer', 'administrasi export'].includes(dept.nama_departemen.trim().toLowerCase());
+    if (isCore) {
+      if (modalAlert) await modalAlert(`Departemen "${dept.nama_departemen}" adalah departemen inti sistem dan tidak dapat dihapus.`);
+      else window.alert(`Departemen "${dept.nama_departemen}" adalah departemen inti sistem dan tidak dapat dihapus.`);
+      return;
+    }
+
+    const confirmed = modalConfirm 
+      ? await modalConfirm(`Apakah Anda yakin ingin menghapus departemen "${dept.nama_departemen}"?`, 'Konfirmasi Hapus')
+      : window.confirm(`Apakah Anda yakin ingin menghapus departemen "${dept.nama_departemen}"?`);
+    
+    if (!confirmed) return;
+
+    setDeptDeletingId(dept.id);
+    try {
+      await removeDepartemen(dept.id);
+    } catch (err) {
+      const msg = err.message || 'Gagal menghapus departemen.';
+      if (modalAlert) await modalAlert(msg);
+      else window.alert(msg);
+    } finally {
+      setDeptDeletingId(null);
+    }
+  };
 
   const addRowStyle = {
     display: 'flex', gap: '8px', marginTop: '12px', alignItems: 'center',
@@ -199,6 +251,98 @@ const ListDataTab = () => {
           </button>
         </div>
       </SectionCard>
+    {/* Departemen (Shared Dept) */}
+      <SectionCard title={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <span>Departemen (Shared Dept)</span>
+          <span style={{ fontSize: '11px', fontWeight: '500', color: 'var(--color-ink-muted-48)', backgroundColor: 'var(--color-canvas-parchment)', padding: '2px 8px', borderRadius: '12px', border: '1px solid var(--color-hairline)' }}>
+            {departemenList.length} Departemen
+          </span>
+        </div>
+      }>
+        <div style={{ marginBottom: '10px', fontSize: '12px', color: 'var(--color-ink-muted-48)' }}>
+          Kelola referensi departemen tujuan penerima sharing dokumen impor (Scan Dokumen &amp; Fisik Asli) pada Dokumen Monitoring.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {departemenList.length === 0 && (
+            <span style={{ fontSize: '13px', color: 'var(--color-ink-muted-48)' }}>Belum ada data departemen</span>
+          )}
+          {departemenList.map((dept, i) => {
+            const isCore = ['import', 'export', 'account officer', 'administrasi export'].includes(dept.nama_departemen.trim().toLowerCase());
+            const isDeleting = deptDeletingId === dept.id;
+
+            return (
+              <div key={dept.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 12px',
+                backgroundColor: i % 2 === 0 ? 'var(--color-canvas)' : 'var(--color-canvas-parchment)',
+                borderRadius: 'var(--rounded-sm)',
+                border: '1px solid var(--color-hairline)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--color-ink)', fontWeight: 500 }}>
+                    {dept.nama_departemen}
+                  </span>
+                  {isCore && (
+                    <span style={{ 
+                      fontSize: '10px', 
+                      color: 'var(--color-accent)', 
+                      backgroundColor: 'var(--color-accent-subtle, rgba(2, 132, 199, 0.08))', 
+                      border: '1px solid rgba(2, 132, 199, 0.2)',
+                      padding: '1px 6px', 
+                      borderRadius: '4px', 
+                      fontWeight: 600 
+                    }}>
+                      Sistem Utama
+                    </span>
+                  )}
+                </div>
+                <button 
+                  onClick={() => handleRemoveDept(dept)} 
+                  disabled={isDeleting || isCore}
+                  title={isCore ? 'Departemen inti sistem tidak dapat dihapus' : 'Hapus departemen'}
+                  style={{
+                    width: '26px', height: '26px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: 'none', background: 'transparent',
+                    cursor: isCore ? 'not-allowed' : 'pointer',
+                    color: isCore ? 'var(--color-ink-muted-48)' : 'var(--color-ink-muted-48)',
+                    opacity: isCore ? 0.35 : (isDeleting ? 0.5 : 1),
+                    borderRadius: 'var(--rounded-xs)',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { if (!isCore && !isDeleting) e.currentTarget.style.color = 'var(--color-status-danger)'; }}
+                  onMouseLeave={e => { if (!isCore && !isDeleting) e.currentTarget.style.color = 'var(--color-ink-muted-48)'; }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <div style={addRowStyle}>
+          <input 
+            type="text" 
+            value={newDept} 
+            onChange={e => setNewDept(e.target.value)}
+            placeholder="Nama departemen baru (mis. Logistik, Gudang, QC)..." 
+            style={{ ...inputSt, flex: 1 }}
+            disabled={isAddingDept}
+            onKeyDown={e => { if (e.key === 'Enter') { handleAddDept(); } }}
+          />
+          <button 
+            style={{
+              ...addBtnStyle,
+              opacity: (!newDept.trim() || isAddingDept) ? 0.6 : 1,
+              cursor: (!newDept.trim() || isAddingDept) ? 'not-allowed' : 'pointer'
+            }} 
+            disabled={!newDept.trim() || isAddingDept}
+            onClick={handleAddDept}
+          >
+            <Plus size={14} /> {isAddingDept ? 'Menambahkan...' : 'Tambah'}
+          </button>
+        </div>
+      </SectionCard>
     </div>
   );
 };
@@ -206,9 +350,14 @@ const ListDataTab = () => {
 // ─── Tab: Truck Price ─────────────────────────────────────────────────────────
 
 const TruckPriceTab = () => {
-  const { masterData, addTruckPriceRow, updateTruckPriceRow, removeTruckPriceRow } = useImportOperationalStore();
+  const { masterData, addTruckPriceRow, updateTruckPriceRow, removeTruckPriceRow, addTruckRouteKey } = useImportOperationalStore();
   const [editCell, setEditCell] = useState(null); // { id, key }
   const [editVal, setEditVal] = useState('');
+  const [isPromptOpen, setIsPromptOpen] = useState(false);
+  const [promptValue, setPromptValue] = useState('');
+
+
+  const TRUCK_ROUTE_KEYS = masterData.truckRouteKeys || [];
 
   const startEdit = (id, key, val) => {
     setEditCell({ id, key });
@@ -217,21 +366,40 @@ const TruckPriceTab = () => {
 
   const commitEdit = () => {
     if (!editCell) return;
-    const numericVal = editVal.trim().toUpperCase() === 'N/A'
-      ? 'N/A'
-      : (Number(editVal.replace(/\./g, '')) || 0);
-    updateTruckPriceRow(editCell.id, editCell.key, numericVal);
+    let finalVal;
+    if (editCell.key === 'param') {
+      finalVal = editVal.trim() || 'NEW';
+    } else {
+      finalVal = editVal.trim().toUpperCase() === 'N/A'
+        ? 'N/A'
+        : (Number(editVal.replace(/\./g, '')) || 0);
+    }
+    updateTruckPriceRow(editCell.id, editCell.key, finalVal);
     setEditCell(null);
     setEditVal('');
   };
 
   const handleAddRow = () => {
+    // Generate default N/A for all existing dynamic routes
+    const defaultRoutes = TRUCK_ROUTE_KEYS.reduce((acc, route) => ({ ...acc, [route.key]: 'N/A' }), {});
     addTruckPriceRow({
       param: 'NEW',
-      r40PBN: 0, r40CIKARANG: 0, r40SAMICO: 0,
-      r20PBN: 0, r20CIKARANG: 0, r20SAMICO: 0,
+      ...defaultRoutes
     });
   };
+
+  const handleAddRoute = () => {
+    setIsPromptOpen(true);
+    setPromptValue('');
+  };
+
+  const confirmAddRoute = () => {
+    if (promptValue && promptValue.trim()) {
+      addTruckRouteKey(promptValue.trim());
+    }
+    setIsPromptOpen(false);
+  };
+
 
   return (
     <div>
@@ -303,20 +471,97 @@ const TruckPriceTab = () => {
           </tbody>
         </table>
       </div>
-      <button onClick={handleAddRow} style={{
-        marginTop: '12px',
-        display: 'inline-flex', alignItems: 'center', gap: '6px',
-        padding: '8px 16px',
-        borderRadius: 'var(--rounded-pill)',
-        border: '1px solid var(--color-hairline)',
-        backgroundColor: 'var(--color-canvas)', cursor: 'pointer',
-        fontSize: '13px', fontFamily: 'var(--font-family-body)',
-      }}>
-        <Plus size={14} /> Tambah Vendor
-      </button>
+      <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+        <button onClick={handleAddRow} style={{
+          display: 'inline-flex', alignItems: 'center', gap: '6px',
+          padding: '8px 16px',
+          borderRadius: 'var(--rounded-pill)',
+          border: '1px solid var(--color-hairline)',
+          backgroundColor: 'var(--color-canvas)', cursor: 'pointer',
+          fontSize: '13px', fontFamily: 'var(--font-family-body)',
+        }}>
+          <Plus size={14} /> Tambah Vendor
+        </button>
+        <button onClick={handleAddRoute} style={{
+          display: 'inline-flex', alignItems: 'center', gap: '6px',
+          padding: '8px 16px',
+          borderRadius: 'var(--rounded-pill)',
+          border: '1px solid var(--color-hairline)',
+          backgroundColor: 'var(--color-canvas)', cursor: 'pointer',
+          fontSize: '13px', fontFamily: 'var(--font-family-body)',
+          color: 'var(--color-primary)'
+        }}>
+          <Plus size={14} /> Tambah Lokasi Baru (Kolom)
+        </button>
+      </div>
+
+      {/* Apple-style Prompt Modal */}
+      {isPromptOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999,
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--color-canvas)',
+            width: '320px',
+            borderRadius: '14px',
+            overflow: 'hidden',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+            display: 'flex', flexDirection: 'column',
+            textAlign: 'center',
+            animation: 'scaleUp 0.2s ease-out'
+          }}>
+            <div style={{ padding: '20px' }}>
+              <h3 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '600', color: 'var(--color-ink)' }}>
+                Tambah Lokasi Baru
+              </h3>
+              <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: 'var(--color-ink-muted-80)' }}>
+                Masukkan nama rute tujuan (misal: 40' SEMARANG)
+              </p>
+              <input 
+                autoFocus
+                type="text" 
+                value={promptValue} 
+                onChange={(e) => setPromptValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirmAddRoute(); }}
+                style={{
+                  width: '100%', padding: '8px 12px',
+                  border: '1px solid var(--color-hairline)', borderRadius: '6px',
+                  fontSize: '14px', outline: 'none', backgroundColor: 'var(--color-canvas)',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <div style={{
+              display: 'flex',
+              borderTop: '1px solid var(--color-hairline)'
+            }}>
+              <button onClick={() => setIsPromptOpen(false)} style={{
+                flex: 1, padding: '14px 0',
+                background: 'none', border: 'none', borderRight: '1px solid var(--color-hairline)',
+                color: '#007AFF', fontSize: '15px', cursor: 'pointer'
+              }}>
+                Cancel
+              </button>
+              <button onClick={confirmAddRoute} style={{
+                flex: 1, padding: '14px 0',
+                background: 'none', border: 'none',
+                color: '#007AFF', fontSize: '15px', fontWeight: '600', cursor: 'pointer'
+              }}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 
 // ─── Tab: Depo Price ──────────────────────────────────────────────────────────
 
@@ -335,7 +580,12 @@ const DepoPriceTab = () => {
   const startEdit = (id, key, val) => { setEditCell({ id, key }); setEditVal(String(val)); };
   const commitEdit = () => {
     if (!editCell) return;
-    const v = Number(editVal.replace(/\./g, '')) || 0;
+    let v;
+    if (editCell.key === 'param') {
+      v = editVal; // Do not parse string param as number
+    } else {
+      v = Number(editVal.replace(/\./g, '')) || 0;
+    }
     updateDepoPriceRow(editCell.id, editCell.key, v);
     setEditCell(null); setEditVal('');
   };
@@ -432,7 +682,7 @@ const DepoPriceTab = () => {
 
 // ─── Main: MasterDataPage ─────────────────────────────────────────────────────
 
-const TABS = ['List Data', 'Truck Price', 'Depo Price'];
+const TABS = ['List Data', 'Truck Price', 'Depo Price', 'Dokumen'];
 
 const MasterDataPage = () => {
   const [activeTab, setActiveTab] = useState('List Data');
@@ -488,6 +738,7 @@ const MasterDataPage = () => {
         {activeTab === 'List Data'   && <ListDataTab />}
         {activeTab === 'Truck Price' && <TruckPriceTab />}
         {activeTab === 'Depo Price'  && <DepoPriceTab />}
+        {activeTab === 'Dokumen'     && <MasterDataDokumen />}
       </div>
     </div>
   );

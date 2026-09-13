@@ -43,27 +43,54 @@ const TaskMap = () => {
   const [filterType, setFilterType] = useState('All');
 
   const { user } = useAuthStore();
-  const { importProjects } = useImportProjectStore();
+  const { importProjects, fetchImportProjects } = useImportProjectStore();
+
+  useEffect(() => {
+    fetchImportProjects();
+  }, [fetchImportProjects]);
+
+  useEffect(() => {
+    window.__IMPORT_PROJECTS_CACHE__ = importProjects;
+  }, [importProjects]);
 
   // ── Modal & Dialog State ──────────────────────────────────────────────────
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);       // TaskDetailModal
   const [confirmingDeleteId, setConfirmingDeleteId] = useState(null); // DeleteConfirmDialog
-
+  const [viewMode, setViewMode] = useState('Personal'); // 'Personal' | 'Delegated'
 
   // ── Filter Logic ──────────────────────────────────────────────────────────
   const filteredTasks = tasks.filter(t => {
-    const matchAssignee = t.assigneeId === user?.id;
+    // Tampilkan tugas secara terpisah
+    const matchAssignee = viewMode === 'Personal' 
+      ? t.assigneeId === user?.id 
+      : true; // Tim mode: tampilkan semua task yang dikembalikan backend (sudah ter-scope)
+
     const matchPrio = filterPriority === 'All' || t.priority === filterPriority;
-    const matchType = filterType === 'All' || t.sumber_tugas === filterType;
+    const matchType = filterType === 'All' || (t.sumber_tugas || '').toUpperCase() === filterType;
     return matchAssignee && matchPrio && matchType;
   });
 
-  // Hitung jumlah tugas eskalasi aktif khusus untuk user yang login
+  // Hitung jumlah tugas eskalasi aktif khusus untuk mode saat ini
   const activeEscalationCount = React.useMemo(() => {
+    return tasks.filter(t => {
+      const isEscalation = (t.sumber_tugas === 'ESCALATION' || t.sumber_tugas === 'Escalation');
+      if (!isEscalation) return false;
+      
+      if (viewMode === 'Personal') {
+        // Tugas eskalasi yang masih harus dikerjakan oleh user ini
+        return t.assigneeId === user?.id && t.status !== 'Review' && t.status !== 'Selesai';
+      } else {
+        // Tim: semua eskalasi yang belum selesai (baik review maupun proses)
+        return t.status !== 'Selesai';
+      }
+    }).length;
+  }, [tasks, user, viewMode]);
+
+  const activeManualCount = React.useMemo(() => {
     return tasks.filter(t => 
       t.assigneeId === user?.id && 
-      t.sumber_tugas === 'ESCALATION' && 
+      (t.sumber_tugas === 'MANUAL' || t.sumber_tugas === 'Manual') && 
       t.status !== 'Review' && 
       t.status !== 'Selesai'
     ).length;
@@ -95,6 +122,7 @@ const TaskMap = () => {
 
   // Task yang sedang dikonfirmasi delete (untuk menampilkan judulnya di dialog)
   const taskToDelete = tasks.find(t => t.id === confirmingDeleteId);
+  const isLeader = user?.level_otoritas === 'Manager' || user?.level_otoritas === 'Supervisor';
 
   // Dropdown Import Project: format "IMP-0001 — [Supplier] ([Import Type])"
   const activeImportProjects = importProjects.filter(p => p.status !== 'Completed');
@@ -104,11 +132,11 @@ const TaskMap = () => {
   }));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', backgroundColor: 'var(--color-canvas-parchment)' }}>
 
       {/* ── Toolbar Header ── */}
       <div style={{
-        padding: '20px 32px',
+        padding: '24px 32px',
         borderBottom: '1px solid var(--color-hairline)',
         backgroundColor: 'var(--color-canvas)',
         display: 'flex',
@@ -116,17 +144,50 @@ const TaskMap = () => {
         alignItems: 'center',
         flexShrink: 0,
       }}>
-        <div>
-          <h1 style={{ fontSize: '28px', fontWeight: '600', letterSpacing: '-0.374px', marginBottom: '2px' }}>
-            Peta Tugas
-          </h1>
-          <p style={{ color: 'var(--color-ink-muted-48)', fontSize: '13px' }}>
-            Meja Kerja Pribadi
-            {' · '}
-            {filterPriority === 'All' ? 'Semua Prioritas' : `Prioritas: ${filterPriority}`}
-            {' · '}
-            {filteredTasks.length} tugas
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+          <div>
+            <h1 style={{ fontSize: '28px', fontWeight: '600', letterSpacing: '-0.374px', marginBottom: '2px', color: 'var(--color-ink)' }}>
+              Peta Tugas
+            </h1>
+            <p style={{ color: 'var(--color-ink-muted-48)', fontSize: '13px' }}>
+              {viewMode === 'Personal' ? 'Meja Kerja Pribadi' : 'Tugas Delegasi (Tim)'}
+              {' · '}
+              {filterPriority === 'All' ? 'Semua Prioritas' : `Prioritas: ${filterPriority}`}
+              {' · '}
+              {filteredTasks.length} tugas
+            </p>
+          </div>
+
+          {isLeader && (
+            <div style={{ display: 'flex', backgroundColor: 'var(--color-canvas-parchment)', padding: '4px', borderRadius: 'var(--rounded-lg)', border: '1px solid var(--color-hairline)' }}>
+              <button 
+                onClick={() => setViewMode('Personal')}
+                style={{
+                  padding: '6px 16px', borderRadius: 'var(--rounded-md)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.2s',
+                  backgroundColor: viewMode === 'Personal' ? 'var(--color-canvas)' : 'transparent',
+                  color: viewMode === 'Personal' ? 'var(--color-primary)' : 'var(--color-ink-muted-48)',
+                  boxShadow: viewMode === 'Personal' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                }}
+              >
+                Pribadi
+              </button>
+              <button 
+                onClick={() => setViewMode('Tim')}
+                style={{
+                  padding: '6px 16px', borderRadius: 'var(--rounded-md)', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px',
+                  backgroundColor: viewMode === 'Tim' ? 'var(--color-canvas)' : 'transparent',
+                  color: viewMode === 'Tim' ? 'var(--color-primary)' : 'var(--color-ink-muted-48)',
+                  boxShadow: viewMode === 'Tim' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                }}
+              >
+                Tim
+                {/* Badge alert if there is a task awaiting review */}
+                {viewMode === 'Personal' && tasks.some(t => t.assigned_by_id === user?.id && t.assigneeId !== user?.id && t.status === 'Review') && (
+                  <span style={{ width: '8px', height: '8px', backgroundColor: '#f43f5e', borderRadius: '50%', display: 'inline-block' }} />
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -144,7 +205,6 @@ const TaskMap = () => {
             }}>
               {[
                 { value: 'All', label: 'Semua' },
-                { value: 'SYSTEM', label: 'Sistem' },
                 { value: 'ESCALATION', label: 'Eskalasi' },
                 { value: 'MANUAL', label: 'Manual' },
               ].map(({ value, label }) => {
@@ -174,15 +234,26 @@ const TaskMap = () => {
                           <span className="bg-rose-500 text-white font-bold rounded-full text-center flex items-center justify-center animate-pulse-subtle" 
                                 style={{ 
                                   backgroundColor: '#f43f5e', color: '#fff', fontWeight: '700', borderRadius: '9999px',
-                                  fontSize: '10px', 
-                                  minWidth: '18px', 
-                                  height: '18px', 
-                                  padding: '0 5px',
-                                  lineHeight: '1',
+                                  fontSize: '10px', minWidth: '18px', height: '18px', padding: '0 5px', lineHeight: '1',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                                   animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
                                 }}>
                             {activeEscalationCount}
+                          </span>
+                        )}
+                      </div>
+                    ) : value === 'MANUAL' ? (
+                      <div className="relative flex items-center gap-2" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>{label}</span>
+                        {activeManualCount > 0 && (
+                          <span className="bg-emerald-500 text-white font-bold rounded-full text-center flex items-center justify-center animate-pulse-subtle" 
+                                style={{ 
+                                  backgroundColor: '#10b981', color: '#fff', fontWeight: '700', borderRadius: '9999px',
+                                  fontSize: '10px', minWidth: '18px', height: '18px', padding: '0 5px', lineHeight: '1',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+                                }}>
+                            {activeManualCount}
                           </span>
                         )}
                       </div>
@@ -219,7 +290,7 @@ const TaskMap = () => {
             </select>
           </div>
 
-          {user?.level_otoritas !== 'Manager' && (
+          {viewMode === 'Personal' && (
             <Button variant="primary" onClick={() => setIsAddModalOpen(true)}>
               + Tambah Tugas
             </Button>
@@ -234,7 +305,6 @@ const TaskMap = () => {
         overflowX: 'auto',
         padding: '24px 32px',
         gap: '20px',
-        alignItems: 'flex-start',
         backgroundColor: 'var(--color-canvas-parchment)',
       }}>
         {COLUMNS.map(col => {
@@ -250,7 +320,7 @@ const TaskMap = () => {
               border: '1px solid var(--color-hairline)',
               display: 'flex',
               flexDirection: 'column',
-              maxHeight: 'calc(100vh - 180px)',
+              height: 'calc(100vh - 180px)',
             }}>
               {/* Column Header */}
               <div style={{
@@ -318,7 +388,7 @@ const TaskMap = () => {
         isOpen={isAddModalOpen} 
         onClose={() => setIsAddModalOpen(false)} 
         defaultDepartment="Import"
-        isPersonal={true}
+        isPersonal={viewMode === 'Personal'}
       />
 
       {/* ── Task Detail Modal ── */}

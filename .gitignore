@@ -13,9 +13,20 @@ dist
 dist-ssr
 *.local
 
-# Database & Uploads
-backend/dev.db
+# Database — SQLite runtime artifacts (never commit local data)
+*.db
+*.db-wal
+*.db-shm
+*.db.bak
+*.db.bak_*
+*.sqlite
 backend/uploads/
+
+# Tunnel / Binary
+cloudflared
+cloudflared.tgz
+.bin/
+*.tgz
 
 # Editor directories and files
 .vscode/*
@@ -34,3 +45,10 @@ backend/uploads/
 /MasterPrompt_FigmaAI_KompasEXIM.md
 .vercel
 .env*
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

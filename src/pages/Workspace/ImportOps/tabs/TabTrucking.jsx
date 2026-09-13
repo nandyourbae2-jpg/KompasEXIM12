@@ -1,113 +1,104 @@
-import React from 'react';
-import CostSection from '../../../../components/CostSection';
-import CostRollup from '../../../../components/CostRollup';
+import React, { useState, useEffect } from 'react';
+import ContainerCostCard from '../../../../components/ContainerCostCard';
 import PaymentBadge from '../../../../components/PaymentBadge';
+import api from '../../../../lib/api';
 
-const Grid = ({ children }) => (
-  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
-    {children}
-  </div>
-);
+const TabTrucking = ({ shipmentId, containers = [], updateContainerCost }) => {
+  const [costs, setCosts] = useState({});
+  const [expanded, setExpanded] = useState({});
 
+  useEffect(() => {
+    const load = async () => {
+      const allCosts = await api(`/import-shipments/${shipmentId}/container-costs`);
+      const grouped = {};
+      (Array.isArray(allCosts) ? allCosts : []).forEach(c => {
+        if (!grouped[c.container_id]) grouped[c.container_id] = {};
+        grouped[c.container_id][c.cost_category] = c;
+      });
+      setCosts(grouped);
+      if (containers.length > 0) setExpanded({ [containers[0].id]: true });
+    };
+    if (shipmentId) load();
+  }, [shipmentId, containers.map(c => c.id).join(',')]);
 
-const TabTrucking = ({ shipmentId, costs, updateCost, totals }) => {
-  const up = (cat, field, val) => updateCost(cat, field, val);
+  const grandTotalLanded = Object.values(costs).reduce((sum, contCosts) => {
+    return sum
+      + (contCosts['TRUC (Repo Depo)']?.dpp || 0)
+      + (contCosts['TRUC (Warehouse)']?.dpp || 0);
+  }, 0);
 
-  const inputSt = {
-    width: '100%', padding: '9px 12px',
-    border: '1px solid var(--color-hairline)',
-    borderRadius: 'var(--rounded-sm)',
-    fontSize: '13px', fontFamily: 'var(--font-family-body)',
-    outline: 'none', backgroundColor: 'var(--color-canvas)',
-    color: 'var(--color-ink)', boxSizing: 'border-box',
-  };
-
-  const autoSt = {
-    ...inputSt,
-    backgroundColor: 'var(--color-canvas-parchment)',
-    color: 'var(--color-ink-muted-80)',
-    cursor: 'not-allowed',
-  };
-
-  const labelSt = {
-    display: 'block', fontSize: '13px', fontWeight: '600',
-    color: 'var(--color-ink)', marginBottom: '5px',
-  };
+  const grandTotalPlusTax = Object.values(costs).reduce((sum, contCosts) => {
+    return sum
+      + (contCosts['TRUC (Repo Depo)']?.total || 0)
+      + (contCosts['TRUC (Warehouse)']?.total || 0);
+  }, 0);
 
   return (
-    <>
-      <CostSection title="TRUC (Repo Depo)" total={totals.trucRepo.total} totalLabel="Total TRUC (Repo) [+PPN]">
-        <Grid>
-          <div>
-            <label style={labelSt}>No. Inv Repo <PaymentBadge shipmentId={shipmentId} categoryKey="trucRepo" /></label>
-            <input type="text" value={costs.trucRepo.noInvRepo} onChange={e => up('trucRepo', 'noInvRepo', e.target.value)} style={inputSt} />
-          </div>
-          <div>
-            <label style={labelSt}>DPP</label>
-            <input type="number" value={costs.trucRepo.dpp} onChange={e => up('trucRepo', 'dpp', e.target.value)} style={inputSt} />
-          </div>
-          <div>
-            <label style={labelSt}>% PPN</label>
-            <input type="number" value={costs.trucRepo.pctPpn} onChange={e => up('trucRepo', 'pctPpn', e.target.value)} style={inputSt} />
-          </div>
-          <div>
-            <label style={labelSt}>PPN</label>
-            <input type="text" value={totals.trucRepo.ppn} readOnly style={autoSt} />
-          </div>
-          <div>
-            <label style={labelSt}>No. FP</label>
-            <input type="text" value={costs.trucRepo.noFp} onChange={e => up('trucRepo', 'noFp', e.target.value)} style={inputSt} />
-          </div>
-        </Grid>
-      </CostSection>
+    <div style={{ padding: '0 8px' }}>
+      {containers.map((container, idx) => {
+        if (!container.id) {
+          return (
+            <div key={`unsaved-${idx}`} style={{ padding: '24px', textAlign: 'center', backgroundColor: '#fef2f2', color: '#991b1b', borderRadius: '8px', marginBottom: '16px', border: '1px solid #fecaca' }}>
+              <strong>Kontainer {idx + 1} belum tersimpan.</strong><br/>
+              Silakan klik tombol <b>"Simpan Semua"</b> di kanan atas terlebih dahulu untuk menyimpan identitas kontainer ini, baru Anda dapat mengisi biayanya.
+            </div>
+          );
+        }
+        return (
+          <ContainerCostCard
+            key={container.id}
+            container={container}
+            idx={idx}
+            costs={costs[container.id] || {}}
+            isExpanded={!!expanded[container.id]}
+            onToggle={() => setExpanded(p => ({ ...p, [container.id]: !p[container.id] }))}
+            shipmentId={shipmentId}
+            tab="TRUCKING"
+            onCostUpdate={(newCost) => {
+              setCosts(p => ({
+                ...p,
+                [container.id]: { ...(p[container.id] || {}), [newCost.cost_category]: newCost }
+              }));
+              if (updateContainerCost) updateContainerCost(newCost);
+            }}
+          />
+        );
+      })}
 
-      <CostSection title="TRUC (Warehouse)" total={totals.trucWh.total} totalLabel="Total TRUC (WH) [+PPN]">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px', marginBottom: '16px' }}>
-          <div>
-            <label style={labelSt}>No. Inv Truk <PaymentBadge shipmentId={shipmentId} categoryKey="trucWh" /></label>
-            <input type="text" value={costs.trucWh.noInvTruk} onChange={e => up('trucWh', 'noInvTruk', e.target.value)} style={inputSt} />
-          </div>
-          <div>
-            <label style={labelSt}>Biaya Dasar</label>
-            <input type="number" value={costs.trucWh.biayaDasar} onChange={e => up('trucWh', 'biayaDasar', e.target.value)} style={inputSt} />
-          </div>
-          <div>
-            <label style={labelSt}>Inap Sasis</label>
-            <input type="number" value={costs.trucWh.inapSasis} onChange={e => up('trucWh', 'inapSasis', e.target.value)} style={inputSt} />
-          </div>
-          <div>
-            <label style={labelSt}>Other Cost</label>
-            <input type="number" value={costs.trucWh.other} onChange={e => up('trucWh', 'other', e.target.value)} style={inputSt} />
-          </div>
-          <div>
-            <label style={labelSt}>Keterangan Other</label>
-            <input type="text" value={costs.trucWh.otherNotes} onChange={e => up('trucWh', 'otherNotes', e.target.value)} style={inputSt} />
-          </div>
+      {containers.length === 0 && (
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-ink-muted-48)', border: '1px dashed var(--color-hairline)', borderRadius: '8px' }}>
+          Belum ada kontainer. Silakan tambahkan kontainer di tab Kontainer.
         </div>
+      )}
 
-        <Grid>
-          <div>
-            <label style={labelSt}>DPP</label>
-            <input type="text" value={totals.trucWh.dpp} readOnly style={autoSt} />
-          </div>
-          <div>
-            <label style={labelSt}>% PPN</label>
-            <input type="number" value={costs.trucWh.pctPpn} onChange={e => up('trucWh', 'pctPpn', e.target.value)} style={inputSt} />
-          </div>
-          <div>
-            <label style={labelSt}>PPN</label>
-            <input type="text" value={totals.trucWh.ppn} readOnly style={autoSt} />
-          </div>
-          <div>
-            <label style={labelSt}>No. FP</label>
-            <input type="text" value={costs.trucWh.noFp} onChange={e => up('trucWh', 'noFp', e.target.value)} style={inputSt} />
-          </div>
-        </Grid>
-      </CostSection>
-
-      <CostRollup label="TRUC LANDED" value={totals.truc.landed} hint="DPP (Repo + Warehouse)" />
-      <CostRollup label="TOTAL TRUC (+TAX)" value={totals.truc.total} hint="TRUC Landed + Seluruh PPN" isGrand />
-    </>
+      {/* Grand Total Bar */}
+      <div style={{
+        background: 'var(--color-ink)',
+        color: 'white',
+        borderRadius: 'var(--rounded-lg)',
+        padding: '24px',
+        marginTop: '24px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+      }}>
+        <div>
+          <p style={{ margin: 0, fontSize: '13px', opacity: 0.8, letterSpacing: '0.5px' }}>
+            TOTAL TRUCKING SEMUA KONTAINER
+          </p>
+          <p style={{ margin: '8px 0 0', fontSize: '18px' }}>
+            Landed: <strong>Rp {grandTotalLanded.toLocaleString('id-ID')}</strong>
+          </p>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <p style={{ margin: 0, fontSize: '13px', opacity: 0.8, letterSpacing: '0.5px' }}>GRAND TOTAL (+TAX)</p>
+          <p style={{ margin: '8px 0 0', fontSize: '28px', fontWeight: '800', color: '#38bdf8' }}>
+            Rp {grandTotalPlusTax.toLocaleString('id-ID')}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 };
 

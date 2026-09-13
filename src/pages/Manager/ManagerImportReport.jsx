@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import useImportOperationalStore from '../../store/useImportOperationalStore';
-import usePaymentStore from '../../store/usePaymentStore';
 import useTaskStore from '../../store/useTaskStore';
 import useAuthStore from '../../store/useAuthStore';
 import useReportStore from '../../store/useReportStore';
-import { hitungStage } from '../../utils/statusShipmentCalc';
-import { Ship, Clock, AlertTriangle, AlertOctagon, Activity, Box, Map, DollarSign, CheckCircle, FileText, Check, MessageSquare, X } from 'lucide-react';
+import useFinancialRequestStore from '../../store/useFinancialRequestStore';
+import useMtbStore from '../../store/useMtbStore';
+import usePibStore from '../../store/usePibStore';
+import { api } from '../../lib/api';
+import { Ship, Clock, AlertTriangle, AlertOctagon, Activity, Box, Map, DollarSign, CheckCircle, FileText, Check, MessageSquare, X, ArrowRight } from 'lucide-react';
 import { getUserName } from '../../utils/userLookup';
 import TaskFormModal from '../../components/TaskFormModal';
 
@@ -16,48 +17,54 @@ const formatRupiah = (number) => {
 
 const ManagerImportReport = () => {
   const navigate = useNavigate();
-  const { shipments } = useImportOperationalStore();
-  const { jobOrders } = usePaymentStore();
-  const { tasks } = useTaskStore();
+  const { tasks, fetchTasks } = useTaskStore();
   const { user, getStaffByDept, getAllUsers } = useAuthStore();
   const { getComputedReports, respondToReport, toggleReviewReport } = useReportStore();
+  const { summary: reqSummary, fetchSummary: fetchReqSummary, requests, fetchRequests, approveRequest: approveFinancialRequest, rejectRequest: rejectFinancialRequest } = useFinancialRequestStore();
+  
+  const { periodes: mtbPeriodes, fetchPeriodes: fetchMtbPeriodes, updatePeriodeStatus } = useMtbStore();
+  const { pibs, fetchPibs } = usePibStore();
+
+  const [analytics, setAnalytics] = useState(null);
+
+  useEffect(() => {
+    fetchReqSummary();
+    fetchRequests();
+    fetchMtbPeriodes();
+    fetchPibs();
+    fetchTasks();
+    api('/import-shipments/analytics').then(setAnalytics).catch(console.error);
+  }, [fetchReqSummary, fetchRequests, fetchMtbPeriodes, fetchPibs, fetchTasks]);
 
   const [responseInputs, setResponseInputs] = useState({});
   const [pipelineModal, setPipelineModal] = useState(null);
+  const [modalShipments, setModalShipments] = useState([]);
+
+  useEffect(() => {
+    if (pipelineModal && analytics?.pipelineIds?.[pipelineModal]) {
+      const ids = analytics.pipelineIds[pipelineModal];
+      if (ids.length > 0) {
+        api(`/import-shipments?ids=${ids.join(',')}&limit=100`)
+          .then(res => setModalShipments(res.data || res))
+          .catch(console.error);
+      } else {
+        setModalShipments([]);
+      }
+    } else {
+      setModalShipments([]);
+    }
+  }, [pipelineModal, analytics]);
   
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedAssignee, setSelectedAssignee] = useState('');
 
+  const [approvalTab, setApprovalTab] = useState('action'); // 'action' or 'history'
+
   // --- SECTION 1: Operasional ---
-  const activeShipments = useMemo(() => shipments.filter(s => hitungStage(s, jobOrders) !== 'Status Complete'), [shipments, jobOrders]);
-  
-  const totalShipmentAktif = activeShipments.length;
-
-  const avgDurasi = useMemo(() => {
-    let totalDur = 0;
-    let count = 0;
-    activeShipments.forEach(s => {
-      s.containers?.forEach(c => {
-        if (c.durasioBongkar) {
-          totalDur += Number(c.durasioBongkar);
-          count++;
-        }
-      });
-    });
-    return count > 0 ? (totalDur / count).toFixed(1) : 0;
-  }, [activeShipments]);
-
-  const dndCharges = useMemo(() => {
-    return jobOrders
-      .filter(jo => jo.costType === "LINE (Extend DO / Demdet)" || jo.cost_type === "LINE (Extend DO / Demdet)")
-      .reduce((sum, jo) => sum + (Number(jo.remainingBalance || jo.remaining_balance) || 0), 0);
-  }, [jobOrders]);
-
-  const clearanceTertunda = useMemo(() => {
-    return activeShipments.filter(s => 
-      s.containers?.some(c => c.fishIssue || c.queueIssue || c.spaceIssue || c.otherIssue)
-    ).length;
-  }, [activeShipments]);
+  const totalShipmentAktif = analytics?.kpi?.activeShipmentCount || 0;
+  const avgDurasi = analytics?.kpi?.avgDurasi || 0;
+  const dndCharges = analytics?.kpi?.dndCharges || 0;
+  const clearanceTertunda = analytics?.kpi?.clearanceTertunda || 0;
 
   // --- SECTION 2: Kinerja Tim ---
   const deptStaff = getStaffByDept('Import');
@@ -128,21 +135,12 @@ const ManagerImportReport = () => {
   }, [tasks, importSupervisors, currentYear, today]);
 
   // --- SECTION 3-6: Status Shipment ---
-  const stagesCount = useMemo(() => {
-    const counts = {
-      'Shipment Active': 0,
-      'Delivery Active': 0,
-      'Financial Settlement': 0,
-      'Status Complete': 0
-    };
-    shipments.forEach(s => {
-      const stage = hitungStage(s, jobOrders) || 'Shipment Active';
-      if (counts[stage] !== undefined) {
-        counts[stage]++;
-      }
-    });
-    return counts;
-  }, [shipments, jobOrders]);
+  const stagesCount = analytics?.kpi?.pipeline || {
+    'Shipment Active': 0,
+    'Delivery Active': 0,
+    'Financial Settlement': 0,
+    'Status Complete': 0
+  };
 
   // --- SECTION 7: Forum Laporan ---
   const importReports = getComputedReports().filter(r => r.departemen === 'Import');
@@ -157,6 +155,52 @@ const ManagerImportReport = () => {
 
   const handleToggleReview = (reportId) => {
     toggleReviewReport(reportId);
+  };
+
+  // --- SECTION 8: Approval & Traceability Center ---
+  const pendingApprovalsList = useMemo(() => {
+    const finReqs = requests
+      .filter(r => r.departemen === 'Import' && r.status === 'Checked1')
+      .map(r => ({ ...r, type: 'Financial Request', title: `Pengajuan Dana: ${r.jenis_pengajuan}`, ref: r.request_number, date: r.submitted_at }));
+    const mtbs = mtbPeriodes
+      .filter(p => p.departemen === 'Import' && p.status === 'Checked1')
+      .map(p => ({ ...p, type: 'Realisasi MTB', title: `Periode Buku Kas MTB`, ref: p.nama_periode, date: p.updated_at }));
+    return [...finReqs, ...mtbs].sort((a,b) => new Date(b.date) - new Date(a.date));
+  }, [requests, mtbPeriodes]);
+
+  const approvalHistoryList = useMemo(() => {
+    const finReqs = requests
+      .filter(r => r.departemen === 'Import' && (r.status === 'Approved' || r.status === 'Rejected') && r.approved_by_id === user?.id)
+      .map(r => ({ ...r, type: 'Financial Request', title: `Pengajuan Dana: ${r.jenis_pengajuan}`, ref: r.request_number, date: r.approved_at, statusLabel: r.status }));
+    const mtbs = mtbPeriodes
+      .filter(p => p.departemen === 'Import' && p.status === 'Approved' && p.approved_by_id === user?.id)
+      .map(p => ({ ...p, type: 'Realisasi MTB', title: `Periode Buku Kas MTB`, ref: p.nama_periode, date: p.approved_at, statusLabel: p.status }));
+    return [...finReqs, ...mtbs].sort((a,b) => new Date(b.date) - new Date(a.date));
+  }, [requests, mtbPeriodes, user?.id]);
+
+  const handleApproveItem = async (item) => {
+    if (item.type === 'Financial Request') {
+      await approveFinancialRequest(item.id, item.version);
+      fetchRequests();
+      fetchReqSummary();
+    } else if (item.type === 'Realisasi MTB') {
+      await updatePeriodeStatus(item.id, { status: 'Approved', version: item.version });
+      fetchMtbPeriodes();
+    }
+  };
+
+  const handleRejectItem = async (item) => {
+    if (item.type === 'Financial Request') {
+      const reason = prompt("Masukkan alasan penolakan:");
+      if (reason) {
+        await rejectFinancialRequest(item.id, item.version, reason);
+        fetchRequests();
+        fetchReqSummary();
+      }
+    } else if (item.type === 'Realisasi MTB') {
+      await updatePeriodeStatus(item.id, { status: 'Draft', version: item.version });
+      fetchMtbPeriodes();
+    }
   };
 
   return (
@@ -213,6 +257,67 @@ const ManagerImportReport = () => {
                   {clearanceTertunda} <span style={{ fontSize: '14px', color: 'var(--color-ink-muted-80)', fontWeight: '400' }}>Shipments</span>
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', marginTop: '8px' }}>Memiliki isu antrian/pemeriksaan</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* SECTION NEW: Financial Overview */}
+        <div style={{ backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-lg)', overflow: 'hidden', marginBottom: 'var(--spacing-xl)' }}>
+          <div style={{ padding: 'var(--spacing-md) var(--spacing-lg)', borderBottom: '1px solid var(--color-hairline)', backgroundColor: 'var(--color-canvas-parchment)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <DollarSign size={18} color="var(--color-primary)" />
+            <h3 style={{ margin: '0', fontSize: '17px', fontWeight: '600', color: 'var(--color-ink)' }}>Financial Overview Import</h3>
+          </div>
+          <div style={{ padding: 'var(--spacing-lg)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 'var(--spacing-lg)' }}>
+            
+            <div style={{ backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-lg)', padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '120px' }}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-ink-muted-48)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Request Pending Approval</div>
+              <div>
+                <div style={{ fontSize: '34px', fontWeight: '600', color: 'var(--color-status-warning)', lineHeight: '1', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                  {reqSummary?.pendingApprovalCount || 0}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', marginTop: '8px' }}>Menunggu approval Manager</div>
+              </div>
+            </div>
+            
+            <div style={{ backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-lg)', padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '120px' }}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-ink-muted-48)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Estimasi (Pending)</div>
+              <div>
+                <div style={{ fontSize: '24px', fontWeight: '600', color: 'var(--color-ink)', lineHeight: '1' }}>
+                  {formatRupiah(reqSummary?.pendingTotal || 0)}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', marginTop: '8px' }}>Total nilai pengajuan</div>
+              </div>
+            </div>
+            
+            <div style={{ backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-lg)', padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '120px' }}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-ink-muted-48)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Approved Bulan Ini</div>
+              <div>
+                <div style={{ fontSize: '34px', fontWeight: '600', color: 'var(--color-status-success)', lineHeight: '1', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                  {reqSummary?.approvedThisMonth || 0}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', marginTop: '8px' }}>Disetujui di bulan berjalan</div>
+              </div>
+            </div>
+
+            <div style={{ backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-lg)', padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '120px', cursor: 'pointer' }} onClick={() => navigate('/workspace/realisasi-dana')}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-ink-muted-48)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Realisasi MTB Pending</div>
+              <div>
+                <div style={{ fontSize: '34px', fontWeight: '600', color: mtbPeriodes.filter(p => p.departemen === 'Import' && (p.status === 'Submitted' || p.status === 'Checked1')).length > 0 ? 'var(--color-status-warning)' : 'var(--color-ink)', lineHeight: '1', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                  {mtbPeriodes.filter(p => p.departemen === 'Import' && (p.status === 'Submitted' || p.status === 'Checked1')).length}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', marginTop: '8px' }}>Menunggu tindakan Manager</div>
+              </div>
+            </div>
+
+            <div style={{ backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-lg)', padding: 'var(--spacing-lg)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '120px', cursor: 'pointer' }} onClick={() => navigate('/workspace/realisasi-dana')}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-ink-muted-48)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PIB Kekurangan Dana</div>
+              <div>
+                <div style={{ fontSize: '34px', fontWeight: '600', color: pibs.filter(p => p.departemen === 'Import' && p.lebih_kurang < 0).length > 0 ? 'var(--color-status-danger)' : 'var(--color-ink)', lineHeight: '1', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                  {pibs.filter(p => p.departemen === 'Import' && p.lebih_kurang < 0).length}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', marginTop: '8px' }}>PIB dengan status minus</div>
               </div>
             </div>
 
@@ -505,6 +610,90 @@ const ManagerImportReport = () => {
           </div>
         </div>
 
+        {/* SECTION 8: Approval & Traceability Center */}
+        <div style={{ backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-lg)', overflow: 'hidden', marginTop: 'var(--spacing-xl)' }}>
+          <div style={{ padding: 'var(--spacing-md) var(--spacing-lg)', borderBottom: '1px solid var(--color-hairline)', backgroundColor: 'var(--color-canvas-parchment)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ margin: '0', fontSize: '17px', fontWeight: '600', color: 'var(--color-ink)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CheckCircle size={18} color="var(--color-primary)" />
+              Approval & Traceability Center
+            </h3>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={() => setApprovalTab('action')}
+                style={{ padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: 'var(--rounded-md)', border: 'none', cursor: 'pointer', backgroundColor: approvalTab === 'action' ? 'var(--color-primary)' : 'transparent', color: approvalTab === 'action' ? 'var(--color-on-primary)' : 'var(--color-ink-muted-80)' }}
+              >
+                Action Required ({pendingApprovalsList.length})
+              </button>
+              <button 
+                onClick={() => setApprovalTab('history')}
+                style={{ padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: 'var(--rounded-md)', border: 'none', cursor: 'pointer', backgroundColor: approvalTab === 'history' ? 'var(--color-primary)' : 'transparent', color: approvalTab === 'history' ? 'var(--color-on-primary)' : 'var(--color-ink-muted-80)' }}
+              >
+                Traceability & History
+              </button>
+            </div>
+          </div>
+          
+          <div style={{ padding: 'var(--spacing-lg)' }}>
+            {approvalTab === 'action' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {pendingApprovalsList.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-ink-muted-48)', fontSize: '13px' }}>Tidak ada dokumen yang menunggu persetujuan Anda saat ini.</div>
+                ) : pendingApprovalsList.map((item, idx) => (
+                  <div key={`${item.type}-${item.id}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-md)' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                      <div style={{ width: '40px', height: '40px', backgroundColor: '#FEF3C7', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706', flexShrink: 0 }}>
+                        <FileText size={20} />
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: '700', backgroundColor: 'var(--color-canvas-parchment)', padding: '2px 6px', borderRadius: '4px', color: 'var(--color-ink-muted-80)' }}>{item.type}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--color-ink-muted-48)' }}>Ref: {item.ref}</span>
+                        </div>
+                        <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: '600', color: 'var(--color-ink)' }}>{item.title}</h4>
+                        <p style={{ margin: '0', fontSize: '12px', color: 'var(--color-ink-muted-80)' }}>
+                          {item.type === 'Financial Request' ? `Estimasi: ${formatRupiah(item.estimasi_nominal)} - ${item.keterangan || '-'}` : `Periode: ${item.tanggal_mulai} s/d ${item.tanggal_selesai}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => handleApproveItem(item)} style={{ backgroundColor: 'var(--color-status-success)', color: 'white', border: 'none', borderRadius: 'var(--rounded-pill)', padding: '8px 16px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Check size={14} /> Approve
+                      </button>
+                      <button onClick={() => handleRejectItem(item)} style={{ backgroundColor: 'transparent', color: 'var(--color-status-danger)', border: '1px solid var(--color-status-danger)', borderRadius: 'var(--rounded-pill)', padding: '8px 16px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <X size={14} /> Tolak
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {approvalHistoryList.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--color-ink-muted-48)', fontSize: '13px' }}>Belum ada riwayat persetujuan.</div>
+                ) : approvalHistoryList.map((item, idx) => (
+                  <div key={`hist-${item.type}-${item.id}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: 'var(--color-canvas-parchment)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-md)' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                      <div style={{ width: '40px', height: '40px', backgroundColor: item.statusLabel === 'Approved' ? '#DCFCE7' : '#FEE2E2', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.statusLabel === 'Approved' ? '#16A34A' : '#DC2626', flexShrink: 0 }}>
+                        <CheckCircle size={20} />
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: '700', backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', padding: '2px 6px', borderRadius: '4px', color: 'var(--color-ink-muted-80)' }}>{item.type}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--color-ink-muted-48)' }}>Tgl: {new Date(item.date).toLocaleDateString('id-ID')}</span>
+                        </div>
+                        <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: '600', color: 'var(--color-ink)' }}>{item.title} ({item.ref})</h4>
+                        <span style={{ backgroundColor: item.statusLabel === 'Approved' ? 'var(--color-status-success-bg)' : 'var(--color-status-danger-bg)', color: item.statusLabel === 'Approved' ? 'var(--color-status-success)' : 'var(--color-status-danger)', padding: '2px 8px', borderRadius: 'var(--rounded-pill)', fontSize: '10px', fontWeight: '700' }}>
+                          {item.statusLabel}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
 
       {/* MODAL STATUS PIPELINE */}
@@ -520,16 +709,16 @@ const ManagerImportReport = () => {
               </button>
             </div>
             <div style={{ padding: '24px', overflowY: 'auto', maxHeight: '60vh' }}>
-              {shipments.filter(s => (hitungStage(s, jobOrders) || 'Shipment Active') === pipelineModal).length === 0 ? (
+              {modalShipments.length === 0 ? (
                 <div style={{ textAlign: 'center', color: 'var(--color-ink-muted-48)', padding: '32px 0' }}>
                   Tidak ada shipment pada tahap ini.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {shipments.filter(s => (hitungStage(s, jobOrders) || 'Shipment Active') === pipelineModal).map(s => (
+                  {modalShipments.map(s => (
                     <div key={s.id} onClick={() => { setPipelineModal(null); navigate('/workspace/status-shipment'); }} style={{ backgroundColor: 'var(--color-canvas-parchment)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-md)', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
                       <div>
-                        <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-ink)' }}>{s.id}</div>
+                        <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-ink)' }}>{s.un || s.id}</div>
                         <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)' }}>{s.supplier}</div>
                       </div>
                       <div style={{ textAlign: 'right' }}>

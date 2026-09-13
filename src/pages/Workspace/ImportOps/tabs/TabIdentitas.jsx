@@ -4,7 +4,9 @@ import CostSection from '../../../../components/CostSection';
 import useImportOperationalStore from '../../../../store/useImportOperationalStore';
 import useImportProjectStore from '../../../../store/useImportProjectStore';
 import useVendorStore from '../../../../store/useVendorStore';
+import VendorSelect from '../../../../components/VendorSelect';
 import { emptyContainer } from '../../../../utils/importCalc';
+import { useAppleModal } from '../../../../contexts/AppleModalContext';
 
 const KAT_OPTIONS = ['RM', 'Ind. Food', 'Ind. Pckg', 'Aset', 'Misc', 'Reim', 'Reex'];
 const MODE_OPTIONS = ['FCL', 'LCL Sea', 'LCL Air', 'Courier', 'MV'];
@@ -21,13 +23,20 @@ const calcHours = (endIso, startIso) => {
 
 const TabIdentitas = ({ identity, setIdentity, containers, setContainers }) => {
   const { masterData } = useImportOperationalStore();
-  const { importProjects } = useImportProjectStore();
+  const { importProjects, fetchImportProjects } = useImportProjectStore();
   const { vendors } = useVendorStore();
+  const { confirm, alert } = useAppleModal();
+
+  React.useEffect(() => {
+    if (importProjects.length === 0) {
+      fetchImportProjects();
+    }
+  }, [importProjects.length, fetchImportProjects]);
 
   const activeTruckingVendors = vendors.filter(v => v.service_type === 'Trucking' && v.status === 'Aktif');
 
   const linkedProject = identity.importProjectId
-    ? importProjects.find(p => p.id === identity.importProjectId)
+    ? importProjects.find(p => String(p.id) === String(identity.importProjectId))
     : null;
 
   const iden = (field, val) => setIdentity(prev => ({ ...prev, [field]: val }));
@@ -38,23 +47,23 @@ const TabIdentitas = ({ identity, setIdentity, containers, setContainers }) => {
       const updated = { ...newConts[index], [field]: val };
       
       // Auto calc
-      updated.lamaInapSasis = calcHours(updated.gateOutWh, updated.truWhGateInWh);
-      updated.waktuAntri = calcHours(updated.offlStart, updated.truWhGateInWh);
-      updated.durasioBongkar = calcHours(updated.offlEnd, updated.offlStart);
+      updated.lamaInapSasis = calcHours(updated.gateOutWh, updated.gateInWh);
+      updated.waktuAntri = calcHours(updated.offloadingStart, updated.gateInWh);
+      updated.durasiBongkar = calcHours(updated.offloadingEnd, updated.offloadingStart);
       
       newConts[index] = updated;
       return newConts;
     });
   };
 
-  const addContainer = () => setContainers(prev => [...prev, emptyContainer()]);
+  const addContainer = () => setContainers(prev => [...prev, { ...emptyContainer(), id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}` }]);
   
-  const removeContainer = (index) => {
+  const removeContainer = async (index) => {
     if (containers.length <= 1) {
-      alert("Minimal 1 kontainer harus ada.");
+      await alert("Minimal 1 kontainer harus ada.");
       return;
     }
-    if (confirm("Yakin ingin menghapus kontainer ini?")) {
+    if (await confirm("Yakin ingin menghapus kontainer ini?")) {
       setContainers(prev => prev.filter((_, i) => i !== index));
     }
   };
@@ -134,9 +143,12 @@ const TabIdentitas = ({ identity, setIdentity, containers, setContainers }) => {
               Supplier
               {sourceBadge}
             </label>
-            <select value={identity.supplier} onChange={e => iden('supplier', e.target.value)} style={inputSt}>
+            <select value={identity.supplier || ''} onChange={e => iden('supplier', e.target.value)} style={inputSt}>
               <option value="">— Pilih Supplier —</option>
-              {masterData.suppliers.map(s => <option key={s}>{s}</option>)}
+              {masterData.suppliers.includes(identity.supplier) === false && identity.supplier ? (
+                <option value={identity.supplier}>{identity.supplier}</option>
+              ) : null}
+              {masterData.suppliers.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 
@@ -190,6 +202,13 @@ const TabIdentitas = ({ identity, setIdentity, containers, setContainers }) => {
 
           <div>
             <label style={labelSt}>
+              ATD (Actual Keberangkatan)
+            </label>
+            <input type="date" value={identity.atd || ''} onChange={e => iden('atd', e.target.value)} style={inputSt} />
+          </div>
+
+          <div>
+            <label style={labelSt}>
               ATA (Actual Kedatangan)
             </label>
             <input type="date" value={identity.ata || ''} onChange={e => iden('ata', e.target.value)} style={inputSt} />
@@ -221,10 +240,10 @@ const TabIdentitas = ({ identity, setIdentity, containers, setContainers }) => {
             </select>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <div style={{ flex: 2 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ flex: 1 }}>
               <label style={labelSt}>Qtty</label>
-              <input type="number" value={identity.qtty || ''} onChange={e => iden('qtty', e.target.value)} style={inputSt} />
+              <input type="number" value={identity.qtty || ''} onChange={e => iden('qtty', Number(e.target.value))} style={inputSt} />
             </div>
             <div style={{ flex: 1 }}>
               <label style={labelSt}>UoM</label>
@@ -235,39 +254,15 @@ const TabIdentitas = ({ identity, setIdentity, containers, setContainers }) => {
           </div>
 
           <div>
-            <label style={labelSt}>Depo Route</label>
-            <select value={identity.depo} onChange={e => iden('depo', e.target.value)} style={inputSt}>
-              <option value="">— Pilih Depo —</option>
-              {masterData.depoRoutes.map(d => <option key={d}>{d}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label style={labelSt}>Gudang</label>
-            <select value={identity.gudang} onChange={e => iden('gudang', e.target.value)} style={inputSt}>
-              <option value="">— Pilih Gudang —</option>
-              {masterData.whRoutes.map(w => <option key={w}>{w}</option>)}
-            </select>
-          </div>
-
-          <div>
             <label style={labelSt}>Import Project</label>
-            {linkedProject ? (
-              <div style={{
-                padding: '9px 12px',
-                border: '1px solid var(--color-status-info)',
-                borderRadius: 'var(--rounded-sm)',
-                backgroundColor: 'var(--color-status-info-bg)',
-                fontSize: '13px', color: 'var(--color-primary)', fontWeight: '600',
-              }}>
-                {identity.importProjectId}
-              </div>
-            ) : (
-              <select value={identity.importProjectId || ''} onChange={e => iden('importProjectId', e.target.value)} style={inputSt}>
-                <option value="">— Tidak terhubung —</option>
-                {importProjects.map(p => <option key={p.id} value={p.id}>{p.id} — {p.supplier}</option>)}
-              </select>
-            )}
+            <select 
+              value={identity.importProjectId || ''} 
+              onChange={e => iden('importProjectId', e.target.value ? Number(e.target.value) : null)} 
+              style={{...inputSt, borderColor: linkedProject ? 'var(--color-primary)' : 'var(--color-hairline)'}}
+            >
+              <option value="">— Tidak terhubung —</option>
+              {importProjects.map(p => <option key={p.id} value={p.id}>{p.id} — {p.supplier}</option>)}
+            </select>
           </div>
         </div>
       </CostSection>
@@ -312,16 +307,31 @@ const TabIdentitas = ({ identity, setIdentity, containers, setContainers }) => {
                 <label style={labelSt}>Gate Out Port</label>
                 <input type="datetime-local" value={(contData.gateOut || '').slice(0, 16)} onChange={e => updateContainer(idx, 'gateOut', e.target.value ? e.target.value + ':00.000Z' : null)} style={inputSt} />
               </div>
-              <div /> {/* Spacer */}
+
+              <div>
+                <label style={labelSt}>Depo Route</label>
+                <select value={contData.depo_route || ''} onChange={e => updateContainer(idx, 'depo_route', e.target.value)} style={inputSt}>
+                  <option value="">— Pilih Depo —</option>
+                  {[...new Set(masterData.depoPrices.map(dp => dp.param))].map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelSt}>Gudang</label>
+                <select value={contData.gudang || ''} onChange={e => updateContainer(idx, 'gudang', e.target.value)} style={inputSt}>
+                  <option value="">— Pilih Gudang —</option>
+                  {masterData.whRoutes.map(w => <option key={w} value={w}>{w}</option>)}
+                </select>
+              </div>
               
               <div style={{ gridColumn: '1 / -1', borderBottom: '1px dashed var(--color-hairline)', margin: '4px 0' }} />
               
               <div>
                 <label style={labelSt}>Trucking Repo Vendor</label>
-                <select value={contData.truRepoVendor} onChange={e => updateContainer(idx, 'truRepoVendor', e.target.value)} style={inputSt}>
-                  <option value="">— Pilih —</option>
-                  {activeTruckingVendors.map(v => <option key={v.id} value={v.nama}>{v.nama}</option>)}
-                </select>
+                <VendorSelect
+                  value={contData.truckingRepoVendor}
+                  onChange={val => updateContainer(idx, 'truckingRepoVendor', val)}
+                  placeholder="— Pilih Vendor —"
+                />
               </div>
               <div>
                 <label style={labelSt}>Depo Arrival</label>
@@ -336,14 +346,15 @@ const TabIdentitas = ({ identity, setIdentity, containers, setContainers }) => {
               
               <div>
                 <label style={labelSt}>Trucking WH Vendor</label>
-                <select value={contData.truWhVendor} onChange={e => updateContainer(idx, 'truWhVendor', e.target.value)} style={inputSt}>
-                  <option value="">— Pilih —</option>
-                  {activeTruckingVendors.map(v => <option key={v.id} value={v.nama}>{v.nama}</option>)}
-                </select>
+                <VendorSelect
+                  value={contData.truckingWhVendor}
+                  onChange={val => updateContainer(idx, 'truckingWhVendor', val)}
+                  placeholder="— Pilih Vendor —"
+                />
               </div>
               <div>
                 <label style={labelSt}>Tru WH Gate In</label>
-                <input type="datetime-local" value={(contData.truWhGateInWh || '').slice(0, 16)} onChange={e => updateContainer(idx, 'truWhGateInWh', e.target.value ? e.target.value + ':00.000Z' : null)} style={inputSt} />
+                <input type="datetime-local" value={(contData.gateInWh || '').slice(0, 16)} onChange={e => updateContainer(idx, 'gateInWh', e.target.value ? e.target.value + ':00.000Z' : null)} style={inputSt} />
               </div>
               <div />
 
@@ -351,11 +362,11 @@ const TabIdentitas = ({ identity, setIdentity, containers, setContainers }) => {
               
               <div>
                 <label style={labelSt}>Offloading Start</label>
-                <input type="datetime-local" value={(contData.offlStart || '').slice(0, 16)} onChange={e => updateContainer(idx, 'offlStart', e.target.value ? e.target.value + ':00.000Z' : null)} style={inputSt} />
+                <input type="datetime-local" value={(contData.offloadingStart || '').slice(0, 16)} onChange={e => updateContainer(idx, 'offloadingStart', e.target.value ? e.target.value + ':00.000Z' : null)} style={inputSt} />
               </div>
               <div>
                 <label style={labelSt}>Offloading End</label>
-                <input type="datetime-local" value={(contData.offlEnd || '').slice(0, 16)} onChange={e => updateContainer(idx, 'offlEnd', e.target.value ? e.target.value + ':00.000Z' : null)} style={inputSt} />
+                <input type="datetime-local" value={(contData.offloadingEnd || '').slice(0, 16)} onChange={e => updateContainer(idx, 'offloadingEnd', e.target.value ? e.target.value + ':00.000Z' : null)} style={inputSt} />
               </div>
               <div>
                 <label style={labelSt}>Gate Out WH</label>
@@ -366,15 +377,15 @@ const TabIdentitas = ({ identity, setIdentity, containers, setContainers }) => {
               
               <div>
                 <label style={labelSt}>Lama Inap Sasis (Jam)</label>
-                <input type="text" value={contData.lamaInapSasis !== null ? `${contData.lamaInapSasis} Jam` : '—'} readOnly style={readOnlySt} />
+                <input type="text" value={contData.lamaInapSasis != null ? `${contData.lamaInapSasis} Jam` : '—'} readOnly style={readOnlySt} />
               </div>
               <div>
                 <label style={labelSt}>Waktu Antri (Jam)</label>
-                <input type="text" value={contData.waktuAntri !== null ? `${contData.waktuAntri} Jam` : '—'} readOnly style={readOnlySt} />
+                <input type="text" value={contData.waktuAntri != null ? `${contData.waktuAntri} Jam` : '—'} readOnly style={readOnlySt} />
               </div>
               <div>
                 <label style={labelSt}>Durasi Bongkar (Jam)</label>
-                <input type="text" value={contData.durasioBongkar !== null ? `${contData.durasioBongkar} Jam` : '—'} readOnly style={readOnlySt} />
+                <input type="text" value={contData.durasiBongkar != null ? `${contData.durasiBongkar} Jam` : '—'} readOnly style={readOnlySt} />
               </div>
 
               <div style={{ gridColumn: '1 / -1', borderBottom: '1px dashed var(--color-hairline)', margin: '4px 0' }} />

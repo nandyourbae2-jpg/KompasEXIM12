@@ -1,15 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BarChart2, TrendingUp, Clock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import useImportOperationalStore from '../../../store/useImportOperationalStore';
 import useAuthStore from '../../../store/useAuthStore';
 import { getSupervisorPageTitle } from '../../../utils/authHelpers';
+import { api } from '../../../lib/api';
 
 const AnalysisPage = () => {
   const { user } = useAuthStore();
-  const { shipments } = useImportOperationalStore();
+  const [analytics, setAnalytics] = useState(null);
 
-  const activeShipments = shipments.filter(s => s.status !== 'Selesai');
+  useEffect(() => {
+    api('/import-shipments/analytics')
+      .then(res => setAnalytics(res))
+      .catch(console.error);
+  }, []);
 
   const Th = ({ children, right }) => (
     <th style={{
@@ -67,52 +71,11 @@ const AnalysisPage = () => {
     </div>
   );
 
-  // Ekstrak semua kontainer dari shipment aktif
-  const allContainers = activeShipments.flatMap(s => 
-    (s.containers || []).map((c, idx) => ({
-      ...c,
-      shipmentId: s.id,
-      un: s.un,
-      kat: s.kat,
-      supplier: s.supplier,
-      gudang: s.gudang,
-      contName: c.cont || `Cont ${idx+1}`,
-      displayName: `${s.un || s.id} - ${c.cont || `C${idx+1}`}`
-    }))
-  );
-
-  // Kalkulasi rata-rata
-  const avgDurasi = allContainers.length > 0
-    ? allContainers.reduce((sum, c) => sum + (Number(c.durasioBongkar) || 0), 0) / allContainers.length
-    : 0;
-  
-  const avgInap = allContainers.length > 0
-    ? allContainers.reduce((sum, c) => sum + (Number(c.lamaInapSasis) || 0), 0) / allContainers.length
-    : 0;
-
-  // Isu terbanyak
-  const issueCounts = { fish: 0, queue: 0, space: 0, other: 0 };
-  allContainers.forEach(c => {
-    if (c.fishIssue) issueCounts.fish++;
-    if (c.queueIssue) issueCounts.queue++;
-    if (c.spaceIssue) issueCounts.space++;
-    if (c.otherIssue) issueCounts.other++;
-  });
-  
-  let topIssue = 'Tidak ada';
-  let topIssueCount = 0;
-  Object.entries(issueCounts).forEach(([issue, count]) => {
-    if (count > topIssueCount) {
-      topIssue = issue.charAt(0).toUpperCase() + issue.slice(1) + ' Issue';
-      topIssueCount = count;
-    }
-  });
-
-  const chartData = allContainers.map(c => ({
-    name: c.displayName,
-    durasiBongkar: Number(c.durasioBongkar) || 0,
-    lamaInapSasis: Number(c.lamaInapSasis) || 0
-  }));
+  const avgDurasi = analytics?.kpi?.avgDurasi || 0;
+  const avgInap = analytics?.kpi?.avgInap || 0;
+  const topIssue = analytics?.issues?.topIssue || 'Tidak ada';
+  const topIssueCount = analytics?.issues?.topIssueCount || 0;
+  const chartData = analytics?.chartData || [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: 'var(--color-canvas-parchment)' }}>
@@ -203,7 +166,7 @@ const AnalysisPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {allContainers.map((c, i) => {
+                {(analytics?.activeContainers || []).map((c, i) => {
                   const issues = [];
                   if (c.fishIssue) issues.push('Fish');
                   if (c.queueIssue) issues.push('Queue');
@@ -214,10 +177,11 @@ const AnalysisPage = () => {
                     <tr key={`${c.shipmentId}-${i}`}>
                       <Td bold>{c.un || '—'} <span style={{ fontWeight: '400', color: 'var(--color-ink-muted-48)', marginLeft: '6px' }}>({c.kat})</span></Td>
                       <Td>{c.contName}</Td>
+
                       <Td>{c.gudang || '—'}</Td>
                       <Td right error={c.lamaInapSasis > 24}>{c.lamaInapSasis || 0} Jam</Td>
                       <Td right error={c.waktuAntri > 5}>{c.waktuAntri || 0} Jam</Td>
-                      <Td right error={c.durasioBongkar > 10}>{c.durasioBongkar || 0} Jam</Td>
+                      <Td right error={c.durasiBongkar > 10}>{c.durasiBongkar || 0} Jam</Td>
                       <Td>
                         {issues.length > 0 ? (
                           <span style={{
@@ -231,7 +195,7 @@ const AnalysisPage = () => {
                     </tr>
                   );
                 })}
-                {allContainers.length === 0 && (
+                {(analytics?.activeContainers || []).length === 0 && (
                   <tr>
                     <td colSpan={7} style={{ padding: '32px', textAlign: 'center', fontSize: '13px', color: 'var(--color-ink-muted-48)' }}>
                       Belum ada data kontainer aktif.

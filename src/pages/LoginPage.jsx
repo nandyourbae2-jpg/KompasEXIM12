@@ -22,11 +22,20 @@ const LoginPage = () => {
       return;
     }
 
+    if (tipeAkses === 'Staff Departemen' && !departemen) {
+      setError('Silakan pilih departemen Anda.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
     try {
-      await login(employeeId, password, {});
-      navigate('/workspace');
+      const user = await login(employeeId.trim(), password, { tipeAkses, departemen });
+      if (user) {
+        navigate('/workspace');
+      } else {
+        // error handled by useAuthStore
+      }
     } catch (err) {
       setError(err.message || 'Login gagal. Periksa data Anda.');
     } finally {
@@ -117,10 +126,66 @@ const LoginPage = () => {
             {error}
           </div>
         )}
+        
+        {useAuthStore.getState().error && !error && (
+          <div style={{
+            backgroundColor: 'var(--color-status-danger-bg)',
+            border: '1px solid var(--color-status-danger)',
+            color: 'var(--color-status-danger)',
+            padding: '10px 14px',
+            borderRadius: 'var(--rounded-sm)',
+            marginBottom: '16px',
+            fontSize: '13px',
+            textAlign: 'center',
+          }}>
+            {useAuthStore.getState().error}
+          </div>
+        )}
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
-          {/* Removed Tipe Akses & Departemen options to simplify login by ID */}
+          {/* Tipe Akses */}
+          <div>
+            <label style={labelStyle}>
+              Tipe Akses <span style={{ color: 'var(--color-status-danger)' }}>*</span>
+            </label>
+            <select
+              data-testid="login-tipe-akses"
+              value={tipeAkses}
+              onChange={e => {
+                setTipeAkses(e.target.value);
+                if (e.target.value !== 'Staff Departemen') {
+                  setDepartemen('');
+                }
+              }}
+              style={inputStyle}
+            >
+              <option value="Staff Departemen">Staff Departemen</option>
+              <option value="Supervisor">Supervisor</option>
+              <option value="Manager">Manager (Top Management)</option>
+            </select>
+          </div>
+
+          {/* Departemen */}
+          {tipeAkses === 'Staff Departemen' && (
+            <div>
+              <label style={labelStyle}>
+                Departemen <span style={{ color: 'var(--color-status-danger)' }}>*</span>
+              </label>
+              <select
+                data-testid="login-departemen"
+                value={departemen}
+                onChange={e => setDepartemen(e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">-- Pilih Departemen --</option>
+                <option value="Import">Import</option>
+                <option value="Export">Export</option>
+                <option value="Administrasi Export">Administrasi Export (AE)</option>
+                <option value="Account Officer">Account Officer (AO)</option>
+              </select>
+            </div>
+          )}
 
           {/* Employee ID */}
           <div>
@@ -128,6 +193,7 @@ const LoginPage = () => {
               Employee ID <span style={{ color: 'var(--color-status-danger)' }}>*</span>
             </label>
             <input
+              data-testid="login-employee-id"
               type="text"
               placeholder="cth: EXIM-IMP-04"
               value={employeeId}
@@ -142,6 +208,7 @@ const LoginPage = () => {
               Password <span style={{ color: 'var(--color-status-danger)' }}>*</span>
             </label>
             <input
+              data-testid="login-password"
               type="password"
               placeholder="Masukkan password Anda (123456)"
               value={password}
@@ -163,6 +230,7 @@ const LoginPage = () => {
 
           {/* Submit */}
           <button
+            data-testid="login-submit-button"
             type="submit"
             disabled={isLoading}
             style={{

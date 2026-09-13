@@ -1,29 +1,40 @@
 import React, { useState, useEffect, useRef } from 'react';
 import usePaymentStore from '../../../store/usePaymentStore';
 import useAuthStore from '../../../store/useAuthStore';
+import useImportProjectStore from '../../../store/useImportProjectStore';
+import useVendorStore from '../../../store/useVendorStore';
+import VendorSelect from '../../../components/VendorSelect';
 import Button from '../../../components/Button';
-import { UploadCloud, CheckCircle2, ChevronDown } from 'lucide-react';
+import { UploadCloud, CheckCircle2, ChevronDown, AlertCircle } from 'lucide-react';
+import { useFormSubmit } from '../../../hooks/useFormSubmit';
 
 const AddInvoiceModal = ({ onClose }) => {
   const { jobOrders, addInvoice } = usePaymentStore();
+  const { importProjects, fetchImportProjects } = useImportProjectStore();
+  const { vendors, fetchVendors } = useVendorStore();
   const { user } = useAuthStore();
   
   const [joId, setJoId] = useState('');
   const [joSearchQuery, setJoSearchQuery] = useState('');
   const [isJoDropdownOpen, setIsJoDropdownOpen] = useState(false);
   
-  const [vendorName, setVendorName] = useState('Samudera Shipping');
+  const [vendorName, setVendorName] = useState('');
   const [customVendorName, setCustomVendorName] = useState('');
   const [costType, setCostType] = useState('Ocean Freight');
   const [currency, setCurrency] = useState('IDR');
   
-  const [totalInvoiceStr, setTotalInvoiceStr] = useState('');
+  const [dppStr, setDppStr] = useState('');
+  const [persenPpn, setPersenPpn] = useState('0');
   const [invoiceDate, setInvoiceDate] = useState('');
   
   const [fileMock, setFileMock] = useState(null);
-  const [formError, setFormError] = useState('');
   
   const comboboxRef = useRef(null);
+
+  useEffect(() => {
+    fetchImportProjects();
+    fetchVendors();
+  }, [fetchImportProjects, fetchVendors]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -35,18 +46,25 @@ const AddInvoiceModal = ({ onClose }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const availableJoIds = ["JO-2024-0715", "JO-2024-0716", "JO-2024-0717", "JO-2024-0718"];
-  const filteredJoIds = availableJoIds.filter(id => id.toLowerCase().includes(joSearchQuery.toLowerCase()));
+  const filteredJoIds = importProjects
+    .map(p => p.taskUniqueNumber)
+    .filter(Boolean)
+    .filter(id => id.toLowerCase().includes(joSearchQuery.toLowerCase()));
 
-  const handleTotalInvoiceChange = (e) => {
+  const handleDppChange = (e) => {
     const rawValue = e.target.value.replace(/\D/g, "");
     if (!rawValue) {
-      setTotalInvoiceStr('');
+      setDppStr('');
       return;
     }
     const formatted = parseInt(rawValue, 10).toLocaleString('id-ID');
-    setTotalInvoiceStr(formatted);
+    setDppStr(formatted);
   };
+  
+  const dppNum = parseInt(dppStr.replace(/\./g, ''), 10) || 0;
+  const ppnNum = parseFloat(persenPpn) || 0;
+  const taxNum = (dppNum * ppnNum) / 100;
+  const totalNum = dppNum + taxNum;
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -54,39 +72,37 @@ const AddInvoiceModal = ({ onClose }) => {
     }
   };
 
-  const handleSave = () => {
-    if (!joId.trim()) {
-      setFormError('Job Order ID wajib diisi'); return;
-    }
-    if (jobOrders.some(jo => jo.id === joId)) {
-      setFormError('Job Order ID sudah terdaftar. Gunakan Update Pembayaran.'); return;
-    }
-    
-    const finalVendor = vendorName === '+ Vendor baru' ? customVendorName : vendorName;
-    if (!finalVendor.trim()) {
-      setFormError('Nama Vendor wajib diisi'); return;
-    }
-    
-    const amount = parseInt(totalInvoiceStr.replace(/\./g, ''), 10);
-    if (!amount || amount <= 0) {
-      setFormError('Total Invoice wajib diisi dan > 0'); return;
-    }
+  const { handleSubmit: handleSave, loading: submitting, error: submitError, fieldErrors, setFieldErrors } = useFormSubmit(
+    async () => {
+      const finalVendor = vendorName;
+      const amount = dppNum;
 
-    if (!fileMock) {
-      setFormError('Dokumen Invoice wajib diupload'); return;
+      if (!joId.trim() || !finalVendor.trim() || !amount || amount <= 0) {
+        setFieldErrors({
+          joId: !joId.trim() ? 'Wajib' : null,
+          vendorName: !finalVendor.trim() ? 'Wajib' : null,
+          dppNum: (!amount || amount <= 0) ? 'Wajib > 0' : null
+        });
+        throw new Error('Mohon lengkapi semua field wajib');
+      }
+
+      if (jobOrders.some(jo => jo.id === joId)) {
+        throw new Error('Job Order ID sudah terdaftar. Gunakan Update Pembayaran.');
+      }
+      
+      await addInvoice({
+        id: joId,
+        vendorName: finalVendor,
+        costType,
+        currency,
+        dpp: amount,
+        persen_ppn: ppnNum,
+        invoiceDate
+      }, fileMock, user);
+
+      onClose();
     }
-
-    addInvoice({
-      id: joId,
-      vendorName: finalVendor,
-      costType,
-      currency,
-      totalInvoice: amount,
-      invoiceDate
-    }, fileMock, user);
-
-    onClose();
-  };
+  );
 
   const styles = {
     overlay: {
@@ -136,20 +152,24 @@ const AddInvoiceModal = ({ onClose }) => {
     }
   };
 
-  const isFormValid = joId && totalInvoiceStr && fileMock;
-
+  const isFormValid = joId && dppStr && fileMock;
   return (
     <div style={styles.overlay}>
       <div style={styles.modal}>
         
         <div style={styles.header}>
-          <h2 style={styles.title}>Tambah Tagihan Baru</h2>
+          <h2 style={styles.title}>Invoice / Tagihan Baru</h2>
         </div>
         
-        {formError && <div style={styles.errorBox}>{formError}</div>}
+        {submitError && (
+          <div style={{ backgroundColor: '#fff1f1', color: '#d32f2f', padding: '12px 16px', borderRadius: '6px', marginBottom: '16px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={16} />
+            {submitError}
+          </div>
+        )}
 
         <div style={styles.inputGroup} ref={comboboxRef}>
-          <label style={styles.labelSmall}>Job Order ID *</label>
+          <label style={styles.labelSmall}>IMP NO (Based on Import Project) *</label>
           <div style={{ position: 'relative' }}>
             <input 
               type="text" 
@@ -160,8 +180,8 @@ const AddInvoiceModal = ({ onClose }) => {
                 setIsJoDropdownOpen(true);
               }}
               onFocus={() => setIsJoDropdownOpen(true)}
-              placeholder="mis. JO-2024-0715" 
-              style={{...styles.input, paddingRight: '40px'}}
+              placeholder="mis. IMP-015-2026" 
+              style={{...styles.input, paddingRight: '40px', border: fieldErrors.joId ? '1px solid var(--color-status-danger)' : styles.input.border}}
             />
             <ChevronDown size={18} color="var(--color-ink-muted-48)" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }} />
           </div>
@@ -184,21 +204,13 @@ const AddInvoiceModal = ({ onClose }) => {
 
         <div style={styles.inputGroup}>
           <label style={styles.labelSmall}>Vendor Name *</label>
-          <select value={vendorName} onChange={e => setVendorName(e.target.value)} style={styles.input}>
-            <option value="Samudera Shipping">Samudera Shipping</option>
-            <option value="Meratus Line">Meratus Line</option>
-            <option value="Tanto Intim">Tanto Intim</option>
-            <option value="SPIL">SPIL</option>
-            <option value="+ Vendor baru">+ Vendor baru</option>
-          </select>
+          <VendorSelect 
+            value={vendorName} 
+            onChange={setVendorName} 
+            style={styles.input} 
+            placeholder="Pilih atau ketik nama vendor" 
+          />
         </div>
-        
-        {vendorName === '+ Vendor baru' && (
-          <div style={styles.inputGroup}>
-            <label style={styles.labelSmall}>Nama Vendor Baru *</label>
-            <input type="text" value={customVendorName} onChange={e => setCustomVendorName(e.target.value)} placeholder="Masukkan nama vendor" style={styles.input} />
-          </div>
-        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div style={styles.inputGroup}>
@@ -219,19 +231,47 @@ const AddInvoiceModal = ({ onClose }) => {
           </div>
         </div>
 
-        <div style={styles.inputGroup}>
-          <label style={styles.labelSmall}>Total Invoice *</label>
-          <div style={{ position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-ink-muted-48)', fontWeight: '600' }}>
-              {currency === 'IDR' ? 'Rp' : '$'}
-            </span>
-            <input 
-              type="text" 
-              value={totalInvoiceStr} 
-              onChange={handleTotalInvoiceChange} 
-              placeholder="0" 
-              style={{...styles.input, paddingLeft: '50px'}} 
-            />
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
+          <div style={styles.inputGroup}>
+            <label style={styles.labelSmall}>DPP *</label>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-ink-muted-48)', fontWeight: '600' }}>
+                {currency === 'IDR' ? 'Rp' : '$'}
+              </span>
+              <input 
+                type="text" 
+                value={dppStr} 
+                onChange={handleDppChange} 
+                placeholder="0" 
+                style={{...styles.input, paddingLeft: '50px'}} 
+              />
+            </div>
+          </div>
+          <div style={styles.inputGroup}>
+            <label style={styles.labelSmall}>%PPN *</label>
+            <div style={{ position: 'relative' }}>
+              <input 
+                type="number" 
+                value={persenPpn} 
+                onChange={e => setPersenPpn(e.target.value)} 
+                placeholder="0" 
+                style={{...styles.input, paddingRight: '40px'}} 
+              />
+              <span style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-ink-muted-48)', fontWeight: '600' }}>
+                %
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ backgroundColor: 'var(--color-canvas-parchment)', padding: '16px', borderRadius: 'var(--rounded-sm)', display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid var(--color-hairline)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: 'var(--color-ink-muted-80)' }}>
+            <span>Tax ({ppnNum}%)</span>
+            <span>{currency === 'IDR' ? 'Rp' : '$'} {taxNum.toLocaleString('id-ID')}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', color: 'var(--color-ink)', fontWeight: '700' }}>
+            <span>Total Invoice</span>
+            <span>{currency === 'IDR' ? 'Rp' : '$'} {totalNum.toLocaleString('id-ID')}</span>
           </div>
         </div>
 
@@ -239,22 +279,11 @@ const AddInvoiceModal = ({ onClose }) => {
           <label style={styles.labelSmall}>Tanggal Invoice (Opsional)</label>
           <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} style={styles.input} />
         </div>
-
-        <div style={styles.inputGroup}>
-          <label style={styles.labelSmall}>Dokumen Invoice *</label>
-          <div style={styles.uploadArea}>
-            <UploadCloud size={32} color={fileMock ? "#34c759" : "var(--color-ink-muted-48)"} style={{ margin: '0 auto 12px auto' }} />
-            <div style={{ fontSize: '14px', color: fileMock ? '#108034' : 'var(--color-ink-muted-80)', fontWeight: '600' }}>
-              {fileMock ? fileMock.name : 'Drag & drop atau klik untuk upload dokumen'}
-            </div>
-            <input type="file" onChange={handleFileChange} style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
-          </div>
-        </div>
         
         <div style={styles.footer}>
-          <Button variant="secondary" onClick={onClose}>Batal</Button>
-          <Button variant="primary" onClick={handleSave} disabled={!isFormValid}>
-            Simpan Tagihan
+          <Button variant="secondary" onClick={onClose} style={{ flex: 1, justifyContent: 'center' }}>Batal</Button>
+          <Button variant="primary" onClick={handleSave} disabled={submitting} style={{ flex: 1, justifyContent: 'center' }}>
+            {submitting ? 'Menyimpan...' : 'Simpan Data Invoice'}
           </Button>
         </div>
 

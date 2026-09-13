@@ -9,15 +9,49 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
+    allowedHosts: true,
+    cors: true,
+    watch: {
+      ignored: ['**/*.db', '**/*.db-journal', '**/backend/**']
+    },
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
+        secure: false,
       },
       '/uploads': {
-        target: 'http://localhost:3001',
+        target: 'http://127.0.0.1:3001',
         changeOrigin: true,
+        secure: false,
       }
     }
-  }
+  },
+  preview: {
+    allowedHosts: true,
+    cors: true,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/uploads': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/setupTests.js',
+    include: ['src/**/*.test.{js,jsx}'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      include: ['src/**/*.{js,jsx}'],
+    },
+  },
 })

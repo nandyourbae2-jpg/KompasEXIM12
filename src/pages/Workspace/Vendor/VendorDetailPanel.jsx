@@ -1,42 +1,125 @@
-import React, { useState } from 'react';
-import { X, Star, Mail, Phone, MapPin, FileText, CheckCircle2 } from 'lucide-react';
-import usePaymentStore from '../../../store/usePaymentStore';
-import useDocumentStore from '../../../store/useDocumentStore';
+import React, { useState, useEffect } from 'react';
+import { X, Star, Mail, Phone, MapPin, CheckCircle2, Plus } from 'lucide-react';
+import useVendorStore from '../../../store/useVendorStore';
+import useAuthStore from '../../../store/useAuthStore';
 import Button from '../../../components/Button';
 import Badge from '../../../components/Badge';
-import UploadDocumentModal from '../UploadDocumentModal';
+
+const VendorEvaluationForm = ({ vendorId, onClose }) => {
+  const { addEvaluation } = useVendorStore();
+  const [formData, setFormData] = useState({
+    evaluation_period: '',
+    service_quality_score: 5,
+    on_time_score: 5,
+    cost_score: 5,
+    responsiveness_score: 5,
+    compliance_score: 5,
+    notes: ''
+  });
+  const [error, setError] = useState('');
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.evaluation_period) {
+      setError('Periode evaluasi wajib diisi.');
+      return;
+    }
+    try {
+      await addEvaluation(vendorId, formData);
+      onClose();
+    } catch (e) {
+      setError(e.message || 'Gagal menyimpan evaluasi');
+    }
+  };
+
+  const inputSt = { width: '100%', padding: '8px', border: '1px solid var(--color-hairline)', borderRadius: '4px', fontSize: '13px' };
+  const labelSt = { display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' };
+
+  return (
+    <div style={{ padding: '16px', backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: '8px', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h4 style={{ margin: 0, fontSize: '14px' }}>Form Evaluasi Baru</h4>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={16} /></button>
+      </div>
+      
+      {error && <div style={{ color: 'var(--color-status-danger)', fontSize: '12px', marginBottom: '12px' }}>{error}</div>}
+
+      <div style={{ display: 'grid', gap: '12px' }}>
+        <div>
+          <label style={labelSt}>Periode Evaluasi (contoh: Q1 2026)</label>
+          <input type="text" name="evaluation_period" value={formData.evaluation_period} onChange={handleChange} style={inputSt} />
+        </div>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div>
+            <label style={labelSt}>Service Quality (1-5)</label>
+            <input type="number" min="1" max="5" step="0.1" name="service_quality_score" value={formData.service_quality_score} onChange={handleChange} style={inputSt} />
+          </div>
+          <div>
+            <label style={labelSt}>On-Time Performance (1-5)</label>
+            <input type="number" min="1" max="5" step="0.1" name="on_time_score" value={formData.on_time_score} onChange={handleChange} style={inputSt} />
+          </div>
+          <div>
+            <label style={labelSt}>Cost Competitiveness (1-5)</label>
+            <input type="number" min="1" max="5" step="0.1" name="cost_score" value={formData.cost_score} onChange={handleChange} style={inputSt} />
+          </div>
+          <div>
+            <label style={labelSt}>Responsiveness (1-5)</label>
+            <input type="number" min="1" max="5" step="0.1" name="responsiveness_score" value={formData.responsiveness_score} onChange={handleChange} style={inputSt} />
+          </div>
+          <div>
+            <label style={labelSt}>Compliance (1-5)</label>
+            <input type="number" min="1" max="5" step="0.1" name="compliance_score" value={formData.compliance_score} onChange={handleChange} style={inputSt} />
+          </div>
+        </div>
+
+        <div>
+          <label style={labelSt}>Catatan</label>
+          <textarea name="notes" value={formData.notes} onChange={handleChange} style={{ ...inputSt, resize: 'vertical', minHeight: '60px' }} />
+        </div>
+
+        <Button variant="primary" onClick={handleSubmit} style={{ width: '100%', justifyContent: 'center' }}>
+          Simpan Evaluasi
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 const VendorDetailPanel = ({ vendor, onClose, canEdit, onEdit }) => {
   const [activeTab, setActiveTab] = useState('Informasi');
-  const [isUploading, setIsUploading] = useState(false);
-  const { jobOrders } = usePaymentStore();
-  const { documents } = useDocumentStore();
-
-  // --- Performa Logic (Reuse from DashboardManager) ---
-  const vendorJOs = jobOrders.filter(jo => jo.vendorName === vendor.nama || jo.vendorId === vendor.id);
-  const totalJo = vendorJOs.length;
-  const lunasJo = vendorJOs.filter(jo => jo.status === 'Lunas').length;
+  const [evaluations, setEvaluations] = useState([]);
+  const [showEvalForm, setShowEvalForm] = useState(false);
+  const { fetchEvaluations } = useVendorStore();
+  const { user } = useAuthStore();
   
-  let totalPay = 0;
-  let onTimePay = 0;
+  const canEvaluate = user?.role === 'Manager' || user?.role === 'Supervisor';
+
+  useEffect(() => {
+    if (activeTab === 'Performa' || activeTab === 'Riwayat') {
+      fetchEvaluations(vendor.id).then(setEvaluations).catch(console.error);
+    }
+  }, [vendor.id, activeTab, fetchEvaluations]);
+
+  const rating = vendor.rating || 0;
+  const reviewCount = vendor.review_count || 0;
+  const isRated = reviewCount > 0;
   
-  vendorJOs.forEach(jo => {
-    jo.payments.forEach(p => {
-      totalPay++;
-      if (new Date(p.date) <= new Date(jo.dueDate)) {
-        onTimePay++;
-      }
-    });
-  });
+  let classificationLabel = 'Belum Dinilai';
+  if (isRated) {
+    if (vendor.classification === 'EXCELLENT') classificationLabel = 'Sangat Baik';
+    else if (vendor.classification === 'VERY_GOOD') classificationLabel = 'Baik Sekali';
+    else if (vendor.classification === 'GOOD') classificationLabel = 'Baik';
+    else if (vendor.classification === 'FAIR') classificationLabel = 'Cukup';
+    else if (vendor.classification === 'POOR') classificationLabel = 'Kurang';
+  }
 
-  const biayaScore = totalJo > 0 ? (lunasJo / totalJo) * 100 : 0;
-  const kepatuhanScore = totalPay > 0 ? (onTimePay / totalPay) * 100 : 100;
-  const overallScore = (biayaScore + kepatuhanScore) / 2;
-
-  // --- Dokumen Logic ---
-  const vendorDocs = documents.filter(d => d.vendorId === vendor.id || (d.tags && d.tags.includes(vendor.id)));
-
-  const tabs = ['Informasi', 'Performa', 'Dokumen', 'Riwayat'];
+  const tabs = ['Informasi', 'Performa', 'Riwayat'];
+  const latestEval = evaluations.length > 0 ? evaluations[0] : null;
 
   return (
     <div style={{
@@ -54,16 +137,21 @@ const VendorDetailPanel = ({ vendor, onClose, canEdit, onEdit }) => {
         </button>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
           <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'var(--color-canvas-parchment)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '20px' }}>
-            {vendor.service_type === 'Trucking' ? '🚛' : '🚢'}
+            {vendor.service_type === 'Trucking' ? '🚛' : vendor.service_type === 'Forwarder' ? '🚢' : '🚢🚛'}
           </div>
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--color-ink)', margin: '0 0 4px 0' }}>{vendor.nama}</h2>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <Badge type="priority" value={vendor.service_type === 'Trucking' ? 'Sedang' : 'Tinggi'} labelOverride={vendor.service_type} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: '600', color: 'var(--color-ink)' }}>
-                <Star size={14} color="#ff9500" fill="#ff9500" />
-                {vendor.rating.toFixed(1)} <span style={{ color: 'var(--color-ink-muted-48)', fontWeight: '400' }}>({vendor.review_count})</span>
-              </div>
+              
+              {isRated ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: '600', color: 'var(--color-ink)' }}>
+                  <Star size={14} color="#ff9500" fill="#ff9500" />
+                  {rating.toFixed(2)} <span style={{ color: 'var(--color-ink-muted-48)', fontWeight: '400' }}>({reviewCount})</span>
+                </div>
+              ) : (
+                <span style={{ fontSize: '12px', color: 'var(--color-ink-muted-48)' }}>Belum Dinilai</span>
+              )}
             </div>
           </div>
         </div>
@@ -115,7 +203,7 @@ const VendorDetailPanel = ({ vendor, onClose, canEdit, onEdit }) => {
             <div>
               <h3 style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--color-ink-muted-48)', margin: '0 0 12px 0', letterSpacing: '0.5px' }}>Layanan Tersedia</h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {vendor.layanan.map((l, i) => (
+                {(Array.isArray(vendor.layanan) ? vendor.layanan : []).map((l, i) => (
                   <span key={i} style={{ backgroundColor: 'var(--color-canvas-parchment)', padding: '4px 10px', borderRadius: 'var(--rounded-md)', fontSize: '12px', border: '1px solid var(--color-hairline)' }}>
                     {l}
                   </span>
@@ -142,86 +230,84 @@ const VendorDetailPanel = ({ vendor, onClose, canEdit, onEdit }) => {
 
         {activeTab === 'Performa' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div style={{ padding: '20px', backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: 'var(--shadow-product)' }}>
-              <div style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--color-ink-muted-80)', fontWeight: '600' }}>Skor Keseluruhan</div>
-              <div style={{ fontSize: '42px', fontWeight: '700', color: overallScore >= 80 ? 'var(--color-status-success)' : 'var(--color-status-warning)', margin: '8px 0' }}>
-                {overallScore.toFixed(0)}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-48)' }}>Berdasarkan {totalJo} Job Orders</div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div style={{ padding: '16px', backgroundColor: 'var(--color-canvas-parchment)', borderRadius: 'var(--rounded-md)', border: '1px solid var(--color-hairline)' }}>
-                <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', marginBottom: '4px' }}>Skor Biaya</div>
-                <div style={{ fontSize: '24px', fontWeight: '600', color: 'var(--color-ink)' }}>{biayaScore.toFixed(0)}%</div>
-                <div style={{ fontSize: '11px', color: 'var(--color-ink-muted-48)', marginTop: '4px' }}>Rasio Lunas</div>
-              </div>
-              <div style={{ padding: '16px', backgroundColor: 'var(--color-canvas-parchment)', borderRadius: 'var(--rounded-md)', border: '1px solid var(--color-hairline)' }}>
-                <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', marginBottom: '4px' }}>Kepatuhan</div>
-                <div style={{ fontSize: '24px', fontWeight: '600', color: 'var(--color-ink)' }}>{kepatuhanScore.toFixed(0)}%</div>
-                <div style={{ fontSize: '11px', color: 'var(--color-ink-muted-48)', marginTop: '4px' }}>Pembayaran Tepat Waktu</div>
-              </div>
-            </div>
             
-            <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', lineHeight: '1.5', padding: '12px', backgroundColor: 'var(--color-canvas-parchment)', borderRadius: 'var(--rounded-md)' }}>
-              Metrik performa di atas dihitung secara real-time dari data Financial Tracker (Dashboard Manager) sepanjang waktu.
-            </div>
-          </div>
-        )}
+            {!showEvalForm && canEvaluate && (
+              <Button variant="secondary" onClick={() => setShowEvalForm(true)} style={{ width: '100%', justifyContent: 'center' }}>
+                <Plus size={16} style={{ marginRight: '8px' }} /> Evaluasi Baru
+              </Button>
+            )}
 
-        {activeTab === 'Dokumen' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <Button variant="primary" onClick={() => setIsUploading(true)} style={{ width: '100%', justifyContent: 'center' }}>Upload Dokumen Vendor</Button>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {vendorDocs.length > 0 ? vendorDocs.map(d => (
-                <div key={d.id} style={{ padding: '12px', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-md)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <FileText size={20} color="var(--color-ink-muted-48)" />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '13px', fontWeight: '500', color: 'var(--color-ink)' }}>{d.fileName}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--color-ink-muted-48)' }}>{d.type} • {d.date}</div>
+            {showEvalForm && (
+              <VendorEvaluationForm vendorId={vendor.id} onClose={() => { setShowEvalForm(false); fetchEvaluations(vendor.id).then(setEvaluations); }} />
+            )}
+
+            {!isRated && !latestEval ? (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--color-ink-muted-48)' }}>
+                Belum ada data performa untuk vendor ini.
+              </div>
+            ) : (
+              <>
+                <div style={{ padding: '20px', backgroundColor: 'var(--color-canvas)', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: 'var(--shadow-product)' }}>
+                  <div style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--color-ink-muted-80)', fontWeight: '600' }}>Skor Keseluruhan</div>
+                  <div style={{ fontSize: '42px', fontWeight: '700', color: rating >= 4.0 ? 'var(--color-status-success)' : rating >= 3.0 ? 'var(--color-status-warning)' : 'var(--color-status-danger)', margin: '8px 0' }}>
+                    {rating.toFixed(2)}
                   </div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-ink)' }}>{classificationLabel}</div>
                 </div>
-              )) : (
-                <div style={{ textAlign: 'center', padding: '24px', color: 'var(--color-ink-muted-48)', fontSize: '13px' }}>
-                  Belum ada dokumen tertaut.
-                </div>
-              )}
-            </div>
+
+                {latestEval && (
+                  <div>
+                    <h4 style={{ fontSize: '13px', margin: '0 0 12px 0', color: 'var(--color-ink)' }}>Detail Evaluasi Terakhir ({latestEval.evaluation_period})</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {[
+                        { label: 'Service Quality (25%)', val: latestEval.service_quality_score },
+                        { label: 'On-Time Performance (25%)', val: latestEval.on_time_score },
+                        { label: 'Cost Competitiveness (20%)', val: latestEval.cost_score },
+                        { label: 'Responsiveness (15%)', val: latestEval.responsiveness_score },
+                        { label: 'Compliance (15%)', val: latestEval.compliance_score }
+                      ].map(item => (
+                        <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', backgroundColor: 'var(--color-canvas-parchment)', borderRadius: '4px', border: '1px solid var(--color-hairline)' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)' }}>{item.label}</span>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-ink)' }}>{item.val.toFixed(1)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 
         {activeTab === 'Riwayat' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {vendorJOs.length > 0 ? vendorJOs.map(jo => (
-              <div key={jo.id} style={{ padding: '12px', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-md)', backgroundColor: 'var(--color-canvas)' }}>
+            {evaluations.length > 0 ? evaluations.map(ev => (
+              <div key={ev.id} style={{ padding: '12px', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-md)', backgroundColor: 'var(--color-canvas)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-ink)' }}>{jo.id}</span>
-                  <Badge type="status" value={jo.status} />
+                  <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-ink)' }}>{ev.evaluation_period}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: 'var(--color-ink)' }}>{ev.overall_score.toFixed(2)}</span>
                 </div>
-                <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', marginBottom: '4px' }}>Cost Type: {jo.costType}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                  <span style={{ color: 'var(--color-ink-muted-48)' }}>{new Date(jo.date).toLocaleDateString('id-ID')}</span>
-                  <span style={{ fontWeight: '600', color: 'var(--color-ink)' }}>{jo.currency} {jo.totalInvoice.toLocaleString('id-ID')}</span>
+                <div style={{ fontSize: '11px', color: 'var(--color-ink-muted-80)', marginBottom: '8px' }}>
+                  Klasifikasi: {ev.classification}
+                </div>
+                {ev.notes && (
+                  <div style={{ fontSize: '12px', color: 'var(--color-ink-muted-80)', fontStyle: 'italic', padding: '8px', backgroundColor: 'var(--color-canvas-parchment)', borderRadius: '4px' }}>
+                    "{ev.notes}"
+                  </div>
+                )}
+                <div style={{ fontSize: '10px', color: 'var(--color-ink-muted-48)', marginTop: '8px', textAlign: 'right' }}>
+                  Dievaluasi pada: {new Date(ev.created_at).toLocaleDateString('id-ID')}
                 </div>
               </div>
             )) : (
               <div style={{ textAlign: 'center', padding: '24px', color: 'var(--color-ink-muted-48)', fontSize: '13px' }}>
-                Belum ada transaksi dengan vendor ini.
+                Belum ada riwayat evaluasi.
               </div>
             )}
           </div>
         )}
 
       </div>
-
-      {isUploading && (
-        <UploadDocumentModal 
-          onClose={() => setIsUploading(false)} 
-          initialVendorId={vendor.id} 
-          initialTags={vendor.id} 
-        />
-      )}
     </div>
   );
 };

@@ -4,8 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "postinstall": "prisma generate"
+    "db:reset": "node src/database/init.js --reset",
+    "db:seed": "node src/database/init.js --seed-only",
+    "reset-data": "node scripts/reset_transactional.js",
+    "dev": "node src/database/init.js && nodemon index.js",
+    "start": "node index.js",
+    "test": "jest --runInBand --forceExit",
+    "test:watch": "jest --watch --runInBand",
+    "test:coverage": "jest --coverage --runInBand --forceExit",
+    "check:no-prisma": "! grep -rn 'PrismaClient\\|@prisma/client' --include='*.js' . --exclude-dir=node_modules || (echo '❌ DITEMUKAN REFERENSI PRISMA — DILARANG!' && exit 1)",
+    "predev": "npm run check:no-prisma",
+    "pretest": "npm run check:no-prisma"
   },
   "keywords": [],
   "author": "",
@@ -15,11 +24,29 @@
     "seed": "node prisma/seed.js"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^13.0.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "multer": "^2.2.0",
-    "prisma": "^5.22.0",
-    "sqlite3": "^6.0.1"
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.3.0",
+    "sqlite3": "^6.0.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/__tests__/setup.js"
+    ]
   }
 }

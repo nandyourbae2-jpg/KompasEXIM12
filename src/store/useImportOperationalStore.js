@@ -1,7 +1,16 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { emptyShipmentCosts, emptyContainer } from '../utils/importCalc';
+import { emptyShipmentCosts, emptyContainer, mergeShipmentCosts } from '../utils/importCalc';
 import usePaymentStore from './usePaymentStore';
+import { api } from '../lib/api';
+
+const calcHours = (endIso, startIso) => {
+  if (!endIso || !startIso) return null;
+  const end = new Date(endIso).getTime();
+  const start = new Date(startIso).getTime();
+  if (isNaN(end) || isNaN(start)) return null;
+  const diffHours = (end - start) / (1000 * 60 * 60);
+  return Math.round(diffHours * 10) / 10;
+};
 
 // ─── Master Data Awal ─────────────────────────────────────────────────────────
 
@@ -34,6 +43,14 @@ const initialMasterData = {
     'Marunda',
   ],
 
+  truckRouteKeys: [
+    { key: 'r40PBN',      label: "40' PBN" },
+    { key: 'r40CIKARANG', label: "40' CIKARANG" },
+    { key: 'r40SAMICO',   label: "40' SAMICO" },
+    { key: 'r20PBN',      label: "20' PBN" },
+    { key: 'r20CIKARANG', label: "20' CIKARANG" },
+    { key: 'r20SAMICO',   label: "20' SAMICO" },
+  ],
 
 
   // truckPrices: [ { updatedAt, param(vendor code), routes: { [routeKey]: number|'N/A' } } ]
@@ -110,111 +127,308 @@ const generateMasterId = (prefix, list) => {
   return `${prefix}-${String(highest + 1)}`;
 };
 
+// ─── Shipment Row Formatter ───────────────────────────────────────────────────
+
+const formatShipment = (s) => ({
+  id: s.id,
+  un: s.un,
+  kat: s.kat,
+  supplier: s.supplier,
+  trade: s.trade,
+  shipmentTerm: s.shipment_term,
+  inv: s.invoice_no,
+  blSwbAwb: s.bl_no,
+  etd: s.etd,
+  eta: s.eta,
+  atd: s.atd,
+  ata: s.ata,
+  hsCode: s.hs_code,
+  freeTimeDest: s.free_time_destination,
+  modeTransport: s.mode_transport,
+  qtty: s.qtty,
+  qttyUom: s.uom,
+  depo: s.depo_route,
+  gudang: s.gudang,
+  importProjectId: s.import_project_id,
+  costs: mergeShipmentCosts(s.costs),
+  createdAt: s.created_at,
+  updatedAt: s.updated_at,
+  createdBy: s.created_by_id,
+  generatedRequestIds: s.generated_request_ids ? JSON.parse(s.generated_request_ids) : {},
+  container_costs: s.container_costs || [],
+  containers: (s.containers || []).map(c => ({
+    id: c.id,
+    cont: c.no_kontainer,
+    stack: c.stack,
+    gateOut: c.gate_out,
+    depo_route: c.depo_route,
+    gudang: c.gudang,
+    truckingRepoVendor: c.trucking_repo_vendor,
+    truRepoArrival: c.tru_repo_arrival,
+    truRepoDepart: c.tru_repo_depart,
+    truckingWhVendor: c.trucking_wh_vendor,
+    gateInWh: c.gate_in_wh,
+    offloadingStart: c.offloading_start,
+    offloadingEnd: c.offloading_end,
+    gateOutWh: c.gate_out_wh,
+    fishIssue: c.fish_issue === 1,
+    queueIssue: c.queue_issue === 1,
+    spaceIssue: c.space_issue === 1,
+    otherIssue: c.other_issue === 1,
+    lamaInapSasis: calcHours(c.gate_out_wh, c.gate_in_wh),
+    waktuAntri: calcHours(c.offloading_start, c.gate_in_wh),
+    durasiBongkar: calcHours(c.offloading_end, c.offloading_start),
+  }))
+});
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
-const useImportOperationalStore = create(persist((set, get) => ({
+const useImportOperationalStore = create((set, get) => ({
   shipments: initialShipments,
+  shipmentPagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
   masterData: initialMasterData,
+  departemenList: [],
+
+  fetchDepartemen: async () => {
+    try {
+      const data = await api('/departemen');
+      if (Array.isArray(data)) {
+        set({ departemenList: data });
+      }
+      return data;
+    } catch (error) {
+      console.error('Error fetching departemen:', error);
+      return [];
+    }
+  },
+
+  addDepartemen: async (name) => {
+    try {
+      const res = await api('/departemen', {
+        method: 'POST',
+        body: JSON.stringify({ nama_departemen: name.trim() })
+      });
+      await get().fetchDepartemen();
+      return { success: true, data: res };
+    } catch (error) {
+      console.error('Error adding departemen:', error);
+      throw error;
+    }
+  },
+
+  removeDepartemen: async (id) => {
+    try {
+      const res = await api(`/departemen/${id}`, { method: 'DELETE' });
+      await get().fetchDepartemen();
+      return { success: true, data: res };
+    } catch (error) {
+      console.error('Error removing departemen:', error);
+      throw error;
+    }
+  },
 
   // ── Shipment CRUD ──────────────────────────────────────────────────────────
 
-  /**
-   * addShipment: Tambah shipment baru dengan identitas awal.
-   * Costs dibuat kosong (0), diisi di detail view.
-   */
-  addShipment: (data) => {
-    const shipments = get().shipments;
-    const id = generateShipmentId(shipments);
-    const ts = new Date().toISOString();
-    const shipment = {
-      id,
-      un: data.un?.trim() || '',
-      kat: data.kat || 'RM',
-      supplier: data.supplier || '',
-      trade: data.trade?.trim() || '',
-      shipmentTerm: data.shipmentTerm?.trim() || '',
-      inv: data.inv?.trim() || '',
-      blSwbAwb: data.blSwbAwb?.trim() || '',
-      etd: data.etd || null,
-      eta: data.eta || null,
-      ata: data.ata || null,
-      hsCode: data.hsCode?.trim() || '',
-      freeTimeDest: Number(data.freeTimeDest) || 0,
-      modeTransport: data.modeTransport || 'FCL',
-      qtty: Number(data.qtty) || 0,
-      qttyUom: data.qttyUom?.trim() || 'MT',
-      depo: data.depo || '',
-      gudang: data.gudang || '',
-      importProjectId: data.importProjectId || null,
-      containers: [{ ...emptyContainer(), cont: data.cont?.trim() || '' }],
-      costs: emptyShipmentCosts(),
-      createdAt: ts,
-      updatedAt: ts,
-      createdBy: data.createdBy || 'User',
-    };
-    set(state => ({ shipments: [shipment, ...state.shipments] }));
-    return shipment;
+  fetchShipments: async (page, limit) => {
+    try {
+      const currentPage = page ?? get().shipmentPagination.page;
+      const currentLimit = limit ?? get().shipmentPagination.limit;
+      const res = await api(`/import-shipments?page=${currentPage}&limit=${currentLimit}`);
+      // Paginated response: { data: [...], pagination: {...} }
+      const rows = res.data ?? res; // fallback in case backend ever returns plain array
+      const pagination = res.pagination ?? get().shipmentPagination;
+      const formatted = rows.map(formatShipment);
+      set({ shipments: formatted, shipmentPagination: pagination });
+    } catch (error) {
+      console.error('Error fetching import shipments:', error);
+    }
   },
 
-  /**
-   * updateShipmentIdentity: Update field identitas + tracking saja.
-   */
-  updateShipmentIdentity: (id, data) => {
-    const ts = new Date().toISOString();
-    set(state => ({
-      shipments: state.shipments.map(s =>
-        s.id !== id ? s : { ...s, ...data, updatedAt: ts }
-      ),
-    }));
+  fetchShipmentsPage: async (page) => {
+    await get().fetchShipments(page, get().shipmentPagination.limit);
   },
 
-  /**
-   * updateShipmentCosts: Simpan seluruh objek costs dari ShipmentDetail.
-   * dipanggil saat user klik "Simpan Semua".
-   */
-  updateShipmentCosts: (id, newCosts) => set(state => {
-    const shipment = state.shipments.find(s => s.id === id);
-    if (!shipment) return state;
-
-    // Trigger sync ke Payment Store
-    usePaymentStore.getState().syncFromImportOps(
-      shipment.id, 
-      shipment.un, 
-      newCosts, 
-      shipment.containers, 
-      {
-        depo: shipment.depo
+  addShipment: async (data) => {
+    try {
+      const payload = {
+        shipment_code: data.shipmentCode || `SHP-${Date.now()}`,
+        import_project_id: data.importProjectId || null,
+        supplier: data.supplier || '',
+        un: data.un || null,
+        kat: data.kat || null,
+        invoice_no: data.inv || null,
+        bl_no: data.blSwbAwb || null,
+        mode_transport: data.modeTransport || null,
+        qtty: data.qtty || 0,
+        uom: data.qttyUom || 'CBM',
+        depo_route: data.depo || null,
+        gudang: data.gudang || null,
+        atd: data.atd || null,
+        ata: data.ata || null,
+        etd: data.etd || null,
+        eta: data.eta || null,
+        hs_code: data.hsCode || null,
+        shipment_term: data.shipmentTerm || null,
+        trade: data.trade || null,
+        free_time_destination: data.freeTimeDest || 0
+      };
+      
+      const headers = {};
+      if (data.idempotencyKey) {
+        headers['Idempotency-Key'] = data.idempotencyKey;
       }
-    );
-
-    return {
-      shipments: state.shipments.map(s => s.id === id ? { ...s, costs: newCosts, updatedAt: new Date().toISOString() } : s)
-    };
-  }),
-
-  /**
-   * updateShipmentContainers: Simpan array containers.
-   */
-  updateShipmentContainers: (id, containers) => {
-    const ts = new Date().toISOString();
-    set(state => ({
-      shipments: state.shipments.map(s =>
-        s.id !== id ? s : { ...s, containers, updatedAt: ts }
-      ),
-    }));
+      const newShipment = await api('/import-shipments', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+      
+      // Add initial container if provided BEFORE fetching authoritative state
+      if (data.cont && data.cont.trim() !== '') {
+        await get().updateShipmentContainers(newShipment.id, [{ cont: data.cont.trim() }]);
+      }
+      
+      // Fetch authoritative state after all mutations are done
+      await get().fetchShipments();
+      
+      return newShipment;
+    } catch (error) {
+      console.error('Error adding shipment:', error);
+      throw error;
+    }
   },
 
-  /**
-   * deleteShipment: Hapus shipment secara permanen.
-   */
-  deleteShipment: (id) => {
-    set(state => ({ shipments: state.shipments.filter(s => s.id !== id) }));
+  updateShipmentIdentity: async (id, data) => {
+    try {
+      const payload = {
+        un: data.un,
+        kat: data.kat,
+        supplier: data.supplier,
+        invoice_no: data.inv,
+        bl_no: data.blSwbAwb,
+        mode_transport: data.modeTransport,
+        qtty: data.qtty,
+        uom: data.qttyUom,
+        depo_route: data.depo,
+        gudang: data.gudang,
+        atd: data.atd,
+        ata: data.ata,
+        etd: data.etd,
+        eta: data.eta,
+        hs_code: data.hsCode,
+        shipment_term: data.shipmentTerm,
+        trade: data.trade,
+        free_time_destination: data.freeTimeDest,
+      };
+      await api(`/import-shipments/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+      await get().fetchShipments();
+    } catch (error) {
+      console.error('Error updating shipment identity:', error);
+      throw error;
+    }
   },
 
-  /**
-   * getShipmentById: Cari satu shipment berdasarkan ID.
-   */
-  getShipmentById: (id) => get().shipments.find(s => s.id === id) || null,
+  updateShipmentCosts: async (id, newCosts) => {
+    console.log('[ImportOpsStore] updateShipmentCosts called for id:', id);
+    try {
+      await api(`/import-shipments/${id}/costs`, {
+        method: 'PATCH',
+        body: JSON.stringify({ costs: newCosts })
+      });
+      console.log('[ImportOpsStore] PATCH /costs successful');
+      
+      await get().fetchShipments();
+      const shipment = get().shipments.find(s => String(s.id) === String(id));
+      console.log('[ImportOpsStore] Found shipment:', !!shipment);
+    } catch (error) {
+      console.error('Error updating shipment costs:', error);
+      throw error;
+    }
+  },
+
+  updateShipmentContainers: async (id, containers) => {
+    // In our backend API, containers are managed per container (PATCH /api/containers/:id, POST /api/import-shipments/:id/containers)
+    // For simplicity, we can reload all shipments after making API calls for each container change.
+    // However, the prompt specifies:
+    // PATCH /api/containers/:id -> update tracking kontainer
+    // POST /api/import-shipments/:id/containers -> tambah kontainer
+    
+    // We expect the frontend to call those endpoints directly or we implement them here.
+    // Let's implement them here as separate methods, but keep this for backward compatibility if it passes the whole array.
+    try {
+      const currentShipment = get().shipments.find(s => String(s.id) === String(id));
+      if (!currentShipment) {
+        console.warn('[updateShipmentContainers] Shipment not found in local store yet. Proceeding with empty old container list.');
+      }
+
+      // Simplistic sync: if a container has no ID, POST it. If it has ID, PATCH it.
+      const idMapping = {};
+      for (const c of containers) {
+        let containerId = c.id;
+        if (!containerId || String(containerId).startsWith('temp-')) {
+          const res = await api(`/import-shipments/${id}/containers`, {
+            method: 'POST',
+            body: JSON.stringify({ no_kontainer: c.cont || '' })
+          });
+          if (containerId) idMapping[containerId] = res.id;
+          containerId = res.id;
+        }
+        
+        const payload = {
+          no_kontainer: c.cont || '',
+          stack: c.stack,
+          gate_out: c.gateOut,
+          depo_route: c.depo_route,
+          gudang: c.gudang,
+          trucking_repo_vendor: c.truckingRepoVendor,
+          tru_repo_arrival: c.truRepoArrival,
+          tru_repo_depart: c.truRepoDepart,
+          trucking_wh_vendor: c.truckingWhVendor,
+          gate_in_wh: c.gateInWh,
+          offloading_start: c.offloadingStart,
+          offloading_end: c.offloadingEnd,
+          gate_out_wh: c.gateOutWh,
+          fish_issue: c.fishIssue ? 1 : 0,
+          queue_issue: c.queueIssue ? 1 : 0,
+          space_issue: c.spaceIssue ? 1 : 0,
+          other_issue: c.otherIssue ? 1 : 0,
+        };
+        await api(`/containers/${containerId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload)
+        });
+      }
+      
+      // Handle deletions
+      const newIds = containers.filter(c => c.id).map(c => c.id);
+      const oldIds = currentShipment ? currentShipment.containers.map(c => c.id) : [];
+      const toDelete = oldIds.filter(oldId => !newIds.includes(oldId));
+      for (const delId of toDelete) {
+        await api(`/containers/${delId}`, { method: 'DELETE' });
+      }
+
+      await get().fetchShipments();
+      return idMapping;
+    } catch (error) {
+      console.error('Error syncing containers:', error);
+      throw error;
+    }
+  },
+
+  deleteShipment: async (id) => {
+    try {
+      await api(`/import-shipments/${id}`, { method: 'DELETE' });
+      await get().fetchShipments();
+    } catch (error) {
+      console.error('Error deleting shipment:', error);
+      throw error;
+    }
+  },
+
+  getShipmentById: (id) => get().shipments.find(s => String(s.id) === String(id)) || null,
 
   // ── Master Data: Suppliers ─────────────────────────────────────────────────
 
@@ -299,6 +513,25 @@ const useImportOperationalStore = create(persist((set, get) => ({
     }));
   },
 
+  addTruckRouteKey: (label) => {
+    const key = 'r' + Date.now();
+    set(state => {
+      // Tambahkan rute baru ke semua vendor (truckPrices) dengan nilai default 'N/A'
+      const updatedTruckPrices = state.masterData.truckPrices.map(row => ({
+        ...row,
+        [key]: 'N/A'
+      }));
+      return {
+        masterData: {
+          ...state.masterData,
+          truckRouteKeys: [...state.masterData.truckRouteKeys, { key, label }],
+          truckPrices: updatedTruckPrices
+        },
+      };
+    });
+  },
+
+
   // ── Master Data: Depo Prices ───────────────────────────────────────────────
 
   addDepoPriceRow: (row) => {
@@ -324,7 +557,7 @@ const useImportOperationalStore = create(persist((set, get) => ({
     set(state => ({
       masterData: { ...state.masterData, depoPrices: state.masterData.depoPrices.filter(r => r.id !== id) },
     }));
-  },
-})), { name: 'importops-storage' }));
+  }
+}));
 
 export default useImportOperationalStore;

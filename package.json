@@ -4,32 +4,49 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "build:full": "npm install && vite build && cd backend && npm install",
     "start": "node backend/index.js",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:ci": "playwright test",
+    "backend:test": "NODE_ENV=test DB_PATH=backend/kompas-exim-test.db node --env-file=backend/.env backend/index.js",
+    "coverage": "vitest run --coverage",
+    "tunnel": "cloudflared tunnel --protocol http2 --edge-ip-version 4 --url http://127.0.0.1:5173"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",
     "morgan": "^1.11.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.18.1",
     "recharts": "^3.9.2",
+    "xlsx": "^0.18.5",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.2",
     "@tailwindcss/vite": "^4.3.2",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^26.5.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.5.2",
+    "jsdom": "^29.1.1",
     "oxlint": "^1.71.0",
     "postcss": "^8.5.18",
     "tailwindcss": "^4.3.2",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^4.1.10"
   }
 }

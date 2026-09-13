@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import Badge from '../../components/Badge';
 import { FileText, Eye, Download, Trash2 } from 'lucide-react';
+import { useAppleModal } from '../../contexts/AppleModalContext';
 
 const DocumentCard = ({ doc, onDeleteClick }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const { alert } = useAppleModal();
 
   return (
     <div 
@@ -48,11 +50,11 @@ const DocumentCard = ({ doc, onDeleteClick }) => {
           animation: 'fadeIn 0.2s ease-in-out'
         }}>
           <button 
-            onClick={() => {
+            onClick={async () => {
               if (doc.file_path) {
                 window.open(doc.file_path, '_blank');
               } else {
-                alert('File tidak tersedia');
+                await alert('File tidak tersedia');
               }
             }}
             style={{
@@ -64,11 +66,11 @@ const DocumentCard = ({ doc, onDeleteClick }) => {
             <Eye size={16} /> Preview
           </button>
           <button 
-            onClick={() => {
+            onClick={async () => {
               if (doc.file_path) {
                 window.open(doc.file_path, '_blank');
               } else {
-                alert('File tidak tersedia');
+                await alert('File tidak tersedia');
               }
             }}
             style={{

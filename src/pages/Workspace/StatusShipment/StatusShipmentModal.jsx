@@ -62,7 +62,7 @@ const StatusShipmentModal = ({ shipment, jobOrders, onClose, stage }) => {
                 <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-hairline)', fontWeight: '600' }}>{c.cont || `Container ${i+1}`}</td>
                 <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-hairline)' }}>{c.stack ? '✅' : '⏳'}</td>
                 <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-hairline)' }}>{c.gateOut ? '✅' : '⏳'}</td>
-                <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-hairline)' }}>{c.offlEnd ? '✅' : '⏳'}</td>
+                <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-hairline)' }}>{c.offloadingEnd ? '✅' : '⏳'}</td>
                 <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--color-hairline)', color: c.gateOutWh ? 'var(--color-status-success)' : 'inherit', fontWeight: c.gateOutWh ? '600' : 'normal' }}>
                   {c.gateOutWh ? '✅ Sudah' : '⏳ Belum'}
                 </td>

@@ -14,7 +14,7 @@ import { AlertTriangle } from 'lucide-react';
  *   onConfirm   — function, dipanggil saat "Hapus" diklik
  *   onCancel    — function, dipanggil saat "Batal" diklik atau backdrop diklik
  */
-const DeleteConfirmDialog = ({ taskTitle, onConfirm, onCancel }) => {
+const DeleteConfirmDialog = ({ taskTitle, onConfirm, onCancel, message }) => {
   return (
     <>
       {/* Backdrop */}
@@ -84,10 +84,14 @@ const DeleteConfirmDialog = ({ taskTitle, onConfirm, onCancel }) => {
                 lineHeight: 1.5,
               }}
             >
-              <strong style={{ color: 'var(--color-ink)', fontWeight: '600' }}>
-                "{taskTitle}"
-              </strong>{' '}
-              akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.
+              {message ? message : (
+                <>
+                  <strong style={{ color: 'var(--color-ink)', fontWeight: '600' }}>
+                    "{taskTitle}"
+                  </strong>{' '}
+                  akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.
+                </>
+              )}
             </p>
           </div>
         </div>

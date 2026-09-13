@@ -23,43 +23,50 @@ const useDocumentStore = create((set) => ({
     }
   },
   
-  addCustomDocumentType: async (type) => {
-    const newType = type.trim();
-    if (!newType || newType === 'Semua' || newType === 'Lainnya') return;
-    
-    // Check locally first
-    const currentTypes = useDocumentStore.getState().customDocumentTypes;
-    if (currentTypes.includes(newType)) return;
-    
-    // Optimistic update
-    set({ customDocumentTypes: [...currentTypes, newType] });
-    
+  addCustomDocumentType: async (formData) => {
     try {
-      await api('/document-types', {
+      const newDoc = await api('/document-types', {
         method: 'POST',
-        body: JSON.stringify({ name: newType })
+        body: JSON.stringify(formData)
       });
+      // Optimistic update using the returned new document
+      set(state => ({ customDocumentTypes: [...state.customDocumentTypes, newDoc] }));
     } catch (err) {
-      // Revert on error
       console.error(err);
-      set({ customDocumentTypes: currentTypes });
+      throw err;
     }
   },
 
-  removeCustomDocumentType: async (typeToRemove) => {
-    const currentTypes = useDocumentStore.getState().customDocumentTypes;
-    
-    // Optimistic update
-    set({ customDocumentTypes: currentTypes.filter(t => t !== typeToRemove) });
-    
+  updateDocumentType: async (id, formData) => {
     try {
-      await api(`/document-types/${encodeURIComponent(typeToRemove)}`, {
+      const updatedDoc = await api(`/document-types/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(formData)
+      });
+      set(state => ({
+        customDocumentTypes: state.customDocumentTypes.map(t => 
+          (typeof t === 'object' && t.id === id) ? updatedDoc : t
+        )
+      }));
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  },
+
+  deleteDocumentType: async (id) => {
+    try {
+      await api(`/document-types/${id}`, {
         method: 'DELETE'
       });
+      set(state => ({
+        customDocumentTypes: state.customDocumentTypes.filter(t => 
+          typeof t === 'object' ? t.id !== id : true
+        )
+      }));
     } catch (err) {
-      // Revert on error
       console.error(err);
-      set({ customDocumentTypes: currentTypes });
+      throw err;
     }
   },
 
@@ -72,7 +79,8 @@ const useDocumentStore = create((set) => ({
     set({ isLoading: true, error: null });
     try {
       const data = await api('/documents');
-      const documents = data.documents.map(normDoc);
+      // Backend returns array directly
+      const documents = (Array.isArray(data) ? data : data.documents || []).map(normDoc);
       set({ documents, isLoading: false });
     } catch (err) {
       set({ error: err.message, isLoading: false });
@@ -88,13 +96,15 @@ const useDocumentStore = create((set) => ({
     formData.append('tags', JSON.stringify(docData.tags || []));
     formData.append('vendor_id', docData.vendorId || docData.vendor_id || '');
     formData.append('status', 'Aktif');
+    formData.append('upload_oleh_id', currentUser?.id || 1); // For DB
 
     try {
       const data = await api('/documents', {
         method: 'POST',
         body: formData,
       });
-      const doc = normDoc({ ...data.document, uploadedById: currentUser?.id });
+      // Backend returns doc directly
+      const doc = normDoc({ ...(data.document || data), uploadedById: currentUser?.id });
       set(state => ({ documents: [doc, ...state.documents] }));
       return doc;
     } catch (err) {
@@ -114,9 +124,11 @@ const useDocumentStore = create((set) => ({
 
     try {
       await api(`/documents/${doc.dbId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ is_deleted: true }),
+        method: 'DELETE',
       });
+      set(state => ({
+        documents: state.documents.filter(d => d.id !== docId)
+      }));
     } catch (err) {
       set(state => ({
         documents: state.documents.map(d => d.id === docId ? { ...d, isDeleted: false } : d),
@@ -135,10 +147,10 @@ const normDoc = (d) => ({
   reference: d.no_referensi,
   department: d.departemen,
   version: `v${d.versi}`,
-  uploadedById: d.upload_oleh?.id || d.uploadedById || null,
-  date: new Date(d.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
+  uploadedById: d.upload_oleh?.id || d.upload_oleh_id || d.uploadedById || null,
+  date: new Date(d.created_at || new Date()).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
   size: d.ukuran_kb ? `${d.ukuran_kb} KB` : '—',
-  tags: d.tags || [],
+  tags: typeof d.tags === 'string' ? JSON.parse(d.tags) : d.tags || [],
   vendorId: d.vendor_id || null,
   status: d.status,
   isDeleted: d.is_deleted || false,

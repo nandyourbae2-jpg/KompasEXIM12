@@ -1,105 +1,138 @@
 import { create } from 'zustand';
+import api from '../lib/api';
+import useAuthStore from './useAuthStore';
 
-// ─── Dummy Data ─────────────────────────────────────────────────────────────
-// 3 Import Project contoh agar halaman Assign Import Project tidak kosong
-// saat pertama dibuka. tanggalInput sudah diset, id tidak berubah setelah dibuat.
+const formatProject = (project) => {
+  let docs = [];
+  if (typeof project.document_requirements === 'string') {
+    try { docs = JSON.parse(project.document_requirements); } catch(e) {}
+  } else if (Array.isArray(project.document_requirements)) {
+    docs = project.document_requirements;
+  }
 
-const initialProjects = [];
-
-// ─── Helper ──────────────────────────────────────────────────────────────────
-/**
- * generateImportId: Generate ID IMP-XXXX lanjutan dari nomor tertinggi yang ada.
- * Format selalu 4 digit dengan zero-padding (IMP-0001, IMP-0002, ..., IMP-1000).
- * ID yang sudah dibuat TIDAK PERNAH berubah — ini hanya dipanggil saat addImportProject().
- */
-const generateImportId = (projects) => {
-  const nums = projects.map(p => {
-    const match = p.id.match(/IMP-(\d+)/);
-    return match ? parseInt(match[1], 10) : 0;
-  });
-  const highest = nums.length > 0 ? Math.max(...nums) : 0;
-  return `IMP-${String(highest + 1).padStart(4, '0')}`;
+  return {
+    id: project.id || project.task_unique_number,
+    dbId: project.id,
+    taskUniqueNumber: project.task_unique_number,
+    supplier: project.supplier,
+    trade: project.trade,
+    importType: project.import_type,
+    shipmentTerm: project.shipment_term,
+    invoiceNo: project.invoice_no,
+    poCoNo: project.po_co_no,
+    billOfLadingNo: project.bl_no,
+    etd: project.etd,
+    eta: project.eta,
+    hsCode: project.hs_code,
+    freeTimeDestination: project.free_time_destination,
+    documentRequirements: docs,
+    tanggalInput: project.tanggal_input || (project.created_at ? project.created_at.replace(' ', 'T') : ''),
+    createdById: project.created_by_id,
+    status: project.status
+  };
 };
 
-// ─── Store ────────────────────────────────────────────────────────────────────
 const useImportProjectStore = create((set, get) => ({
-  importProjects: initialProjects,
-
-  /**
-   * editingProject: Project yang sedang di-edit via tombol "Edit" di tabel.
-   * null = mode tambah baru, objek = mode edit (form pre-filled).
-   */
+  importProjects: [],
+  loading: false,
   editingProject: null,
 
-  /**
-   * addImportProject: Tambah Import Project baru.
-   * Auto-generate ID IMP-XXXX (immutable setelah dibuat).
-   * tanggalInput diset ke tanggal hari ini dan tidak bisa diubah setelahnya.
-   */
-  addImportProject: (data) => {
-    const projects = get().importProjects;
-    const id = generateImportId(projects);
-    const tanggalInput = new Date().toISOString().split('T')[0]; // Format YYYY-MM-DD
-
-    const project = {
-      id,
-      supplier: data.supplier.trim(),
-      trade: data.trade.trim(),
-      importType: data.importType,
-      shipmentTerm: data.shipmentTerm.trim(),
-      invoiceNo: data.invoiceNo.trim(),
-      billOfLadingNo: data.billOfLadingNo.trim(),
-      etd: data.etd,
-      eta: data.eta,
-      hsCode: data.hsCode.trim(),
-      freeTimeDestination: data.freeTimeDestination.trim(),
-      tanggalInput, // Set otomatis, tidak bisa di-override
-    };
-
-    set(state => ({
-      importProjects: [project, ...state.importProjects],
-    }));
-    return project;
+  fetchImportProjects: async () => {
+    set({ loading: true });
+    try {
+      const data = await api('/import-projects');
+      const formattedData = data.map(formatProject);
+      set({ importProjects: formattedData });
+    } catch (error) {
+      console.error('Error fetching import projects:', error);
+    } finally {
+      set({ loading: false });
+    }
   },
 
-  /**
-   * updateImportProject: Edit Import Project yang sudah ada.
-   * id dan tanggalInput TIDAK PERNAH diubah, walau data di-payload berisi keduanya.
-   */
-  updateImportProject: (id, data) => {
-    set(state => ({
-      importProjects: state.importProjects.map(p => {
-        if (p.id !== id) return p;
-        return {
-          ...p,
-          // Immutable: id dan tanggalInput dipertahankan dari object asli
-          supplier: data.supplier.trim(),
-          trade: data.trade.trim(),
-          importType: data.importType,
-          shipmentTerm: data.shipmentTerm.trim(),
-          invoiceNo: data.invoiceNo.trim(),
-          billOfLadingNo: data.billOfLadingNo.trim(),
-          etd: data.etd,
-          eta: data.eta,
-          hsCode: data.hsCode.trim(),
-          freeTimeDestination: data.freeTimeDestination.trim(),
-        };
-      }),
-      editingProject: null, // Reset setelah update berhasil
-    }));
+  addImportProject: async (data) => {
+    try {
+      const user = useAuthStore.getState().user;
+
+      // Convert camelCase to snake_case for backend
+      const payload = {
+        supplier: data.supplier,
+        trade: data.trade,
+        import_type: data.importType,
+        shipment_term: data.shipmentTerm,
+        invoice_no: data.invoiceNo,
+        po_co_no: data.poCoNo,
+        bl_no: data.billOfLadingNo,
+        etd: data.etd,
+        eta: data.eta,
+        hs_code: data.hsCode,
+        free_time_destination: data.freeTimeDestination,
+        document_requirements: data.documentRequirements,
+        created_by_id: user?.id || null, // Use logged-in user ID, not hardcoded
+      };
+
+      const newProject = await api('/import-projects', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      
+      const formattedProject = formatProject(newProject);
+      set(state => ({ importProjects: [formattedProject, ...state.importProjects] }));
+      return formattedProject;
+    } catch (error) {
+      console.error('Error adding import project:', error);
+      throw error;
+    }
   },
 
-  /**
-   * setEditingProject: Simpan project yang akan di-edit ke state.
-   * Dipanggil saat tombol "Edit" di tabel diklik.
-   * Pass null untuk kembali ke mode tambah baru.
-   */
+  updateImportProject: async (id, data) => {
+    try {
+      const payload = {
+        supplier: data.supplier,
+        trade: data.trade,
+        import_type: data.importType,
+        shipment_term: data.shipmentTerm,
+        invoice_no: data.invoiceNo,
+        po_co_no: data.poCoNo,
+        bl_no: data.billOfLadingNo,
+        etd: data.etd,
+        eta: data.eta,
+        hs_code: data.hsCode,
+        free_time_destination: data.freeTimeDestination,
+        document_requirements: data.documentRequirements,
+      };
+
+      const updatedProject = await api(`/import-projects/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      });
+
+      const formattedProject = formatProject(updatedProject);
+      set(state => ({
+        importProjects: state.importProjects.map(p => p.dbId === id ? formattedProject : p),
+        editingProject: null
+      }));
+      return formattedProject;
+    } catch (error) {
+      console.error('Error updating import project:', error);
+      throw error;
+    }
+  },
+
+  deleteImportProject: async (id) => {
+    try {
+      await api(`/import-projects/${id}`, { method: 'DELETE' });
+      set(state => ({
+        importProjects: state.importProjects.filter(p => p.id !== id)
+      }));
+    } catch (error) {
+      console.error('Error deleting import project:', error);
+      throw error;
+    }
+  },
+
   setEditingProject: (project) => set({ editingProject: project }),
 
-  /**
-   * getProjectById: Helper untuk mendapatkan project berdasarkan ID.
-   * Dipakai oleh TaskDetailModal dan TaskCard untuk menampilkan info project.
-   */
   getProjectById: (id) => {
     if (!id) return null;
     return get().importProjects.find(p => p.id === id) || null;

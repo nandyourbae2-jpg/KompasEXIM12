@@ -1,40 +1,56 @@
 // src/lib/api.js
-// Shared fetch utility yang semua store gunakan untuk memanggil backend API.
-// Otomatis membaca base URL dari .env (VITE_API_BASE_URL).
-// Mengirim credentials (cookies) di setiap request agar JWT cookie terkirim.
+import { getToken, clearToken } from '../utils/authToken';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
-/**
- * api(endpoint, options)
- * Wrapper tipis di atas fetch:
- *  - Selalu kirim credentials (cookies)
- *  - Set Content-Type JSON secara default (kecuali FormData)
- *  - Throw error jika response tidak ok
- */
+export class ApiError extends Error {
+  constructor(message, status, fields = []) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.fields = fields;
+  }
+}
+
 export const api = async (endpoint, options = {}) => {
   const isFormData = options.body instanceof FormData;
+
+  let token = getToken();
 
   const headers = {
     'Pinggy-Skip': 'true',
     ...(!isFormData && { 'Content-Type': 'application/json' }),
+    ...(token && { 'Authorization': `Bearer ${token}` }),
     ...(options.headers || {}),
   };
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-    credentials: 'include', // Kirim httpOnly cookie di setiap request
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    const error = new Error(data.error || `HTTP error ${response.status}`);
-    error.status = response.status;
-    throw error;
+  let response;
+  try {
+    response = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+  } catch (err) {
+    throw new ApiError('Tidak dapat terhubung ke server. Pastikan backend sedang berjalan.', 0, []);
   }
 
-  // 204 No Content (misal DELETE) tidak ada body
+  if (!response.ok) {
+    if (response.status === 401) {
+      clearToken();
+      console.error('API 401 Redirect Intercepted for:', endpoint);
+      // window.location.hash = '#/login';
+      return null;
+    }
+
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(
+      data.message || data.error || `Gagal: HTTP ${response.status}`,
+      response.status,
+      data.fields || []
+    );
+  }
+
   if (response.status === 204) return null;
 
   return response.json();

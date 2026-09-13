@@ -9,7 +9,7 @@
 // 1. IDENTIFIKASI ROLE UTAMA
 export const isManager = (user) => user?.level_otoritas === 'Manager';
 
-export const isSupervisor = (user) => user?.level_otoritas === 'Supervisor';
+export const isSupervisor = (user) => user?.level_otoritas === 'Supervisor' || user?.level_otoritas === 'SPV Dept';
 
 export const isOperational = (user) =>
   user?.level_otoritas === 'Staff Dept';
@@ -25,14 +25,22 @@ export const canAccessControlTower = (user) => isSupervisor(user);
 export const canAccessOperationalWorkspace = (user) => isOperational(user) || isSupervisor(user);
 
 // 3b. Finansial & Relasi (Hanya Import & Export)
-//     Termasuk: Monitoring Pembayaran, Manajemen Vendor
+//     Termasuk: Monitoring Pembayaran, Manajemen Vendor, Realisasi Dana (MTB)
 export const canAccessFinanceAndVendor = (user) =>
-  (isOperational(user) && (user?.departemen === 'Import' || user?.departemen === 'Export')) || isSupervisor(user);
+  (isOperational(user) && (user?.departemen === 'Import' || user?.departemen === 'Export')) || isSupervisor(user) || isManager(user);
 
 // 3c. Import Module (Hanya Import)
 //     Termasuk: Assign Import Project, Import Operational, PlanGDG, Master Data Import
 export const canAccessImportModule = (user) =>
   (isOperational(user) && user?.departemen === 'Import') || isSupervisor(user);
+
+// 3d. AO Module (Hanya Account Officer)
+export const canAccessAoModule = (user) =>
+  user?.departemen === 'Account Officer' || isManager(user);
+
+export const isAoSupervisor = (user) =>
+  isSupervisor(user) && user?.departemen === 'Account Officer';
+
 
 
 // 4. AKSES KHUSUS (Tumpang tindih / Bersama)

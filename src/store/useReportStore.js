@@ -1,70 +1,83 @@
 import { create } from 'zustand';
-
-// Tipe: 'Weekday Report', 'Problem Report', 'Progress Update', 'Solve Update'
-
-const initialReports = [
-  {
-    id: 'RPT-001',
-    tipe: 'Weekday Report',
-    judul: 'Laporan Harian Operasional Import',
-    isi: 'Seluruh kegiatan operasional berjalan lancar, tidak ada isu demurrage yang mendesak hari ini.',
-    departemen: 'Import',
-    dibuatOlehId: 1,
-    tanggal: new Date(Date.now() - 2 * 86400000).toISOString(),
-    problem_report_id: null,
-    tanggapan_manager: null,
-    ditanggapi_oleh: null,
-    tanggapan_pada: null,
-    ditinjau_manager: false,
-  },
-  {
-    id: 'RPT-002',
-    tipe: 'Problem Report',
-    judul: 'Keterlambatan DO dari Samudera',
-    isi: 'Pengambilan DO terhambat karena sistem vendor sedang down. Potensi delay clearance 1 hari.',
-    departemen: 'Import',
-    dibuatOlehId: 1,
-    tanggal: new Date(Date.now() - 1 * 86400000).toISOString(),
-    problem_report_id: null,
-    tanggapan_manager: null,
-    ditanggapi_oleh: null,
-    tanggapan_pada: null,
-    ditinjau_manager: false,
-  }
-];
+import api from '../lib/api';
 
 const useReportStore = create((set, get) => ({
-  reports: initialReports,
+  reports: [],
+  loading: false,
+
+  fetchReports: async () => {
+    set({ loading: true });
+    try {
+      const data = await api('/reports');
+      // Format properties for frontend
+      const formatted = data.map(r => ({
+        id: r.id,
+        tipe: r.tipe,
+        judul: r.judul,
+        isi: r.isi,
+        departemen: r.departemen,
+        dibuatOlehId: r.dibuat_oleh_id,
+        tanggal: r.tanggal,
+        problem_report_id: r.problem_report_id,
+        tanggapan_manager: r.tanggapan_manager,
+        ditanggapi_oleh: r.ditanggapi_oleh_id,
+        tanggapan_pada: r.tanggapan_pada,
+        ditinjau_manager: Boolean(r.ditinjau_manager),
+      }));
+      set({ reports: formatted });
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    } finally {
+      set({ loading: false });
+    }
+  },
   
-  addReport: (newReport) => set((state) => {
-    const id = `RPT-${String(state.reports.length + 1).padStart(3, '0')}`;
-    const report = {
-      id,
-      tanggal: new Date().toISOString(),
-      tanggapan_manager: null,
-      ditanggapi_oleh: null,
-      tanggapan_pada: null,
-      ditinjau_manager: false,
-      ...newReport,
-    };
-    return { reports: [report, ...state.reports] };
-  }),
+  addReport: async (newReport) => {
+    try {
+      const payload = {
+        tipe: newReport.tipe || newReport.report_type, // Support both field names
+        judul: newReport.judul || newReport.title,
+        isi: newReport.isi || newReport.desc,
+        departemen: newReport.departemen,
+        // dibuat_oleh_id is resolved from token server-side, no need to hardcode
+        problem_report_id: newReport.problem_report_id || null,
+      };
+      await api('/reports', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      await get().fetchReports();
+    } catch (error) {
+      console.error('Error adding report:', error);
+      throw error;
+    }
+  },
 
-  respondToReport: (reportId, responseText, managerName) => set((state) => ({
-    reports: state.reports.map(r => 
-      r.id === reportId 
-        ? { ...r, tanggapan_manager: responseText, ditanggapi_oleh: managerName, tanggapan_pada: new Date().toISOString() }
-        : r
-    )
-  })),
+  respondToReport: async (reportId, responseText, managerId) => {
+    try {
+      await api(`/reports/${reportId}/tanggapan`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tanggapan_manager: responseText, ditanggapi_oleh_id: managerId })
+      });
+      await get().fetchReports();
+    } catch (error) {
+      console.error('Error responding to report:', error);
+      throw error;
+    }
+  },
 
-  toggleReviewReport: (reportId) => set((state) => ({
-    reports: state.reports.map(r => 
-      r.id === reportId 
-        ? { ...r, ditinjau_manager: !r.ditinjau_manager }
-        : r
-    )
-  })),
+  toggleReviewReport: async (reportId) => {
+    try {
+      // Backend api just sets it to 1 (ditinjau_manager = 1)
+      await api(`/reports/${reportId}/tinjau`, {
+        method: 'PATCH'
+      });
+      await get().fetchReports();
+    } catch (error) {
+      console.error('Error reviewing report:', error);
+      throw error;
+    }
+  },
 
   // Computed properties
   getComputedReports: () => {

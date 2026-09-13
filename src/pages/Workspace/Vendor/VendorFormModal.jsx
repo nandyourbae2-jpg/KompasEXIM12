@@ -40,6 +40,11 @@ const VendorFormModal = ({ onClose, initialData = null }) => {
       setError('Nama dan Region wajib diisi.');
       return;
     }
+    
+    if (!formData.service_type || !['Trucking', 'Forwarder', 'Both'].includes(formData.service_type)) {
+      setError('Service Type wajib dipilih (Trucking/Forwarder/Both).');
+      return;
+    }
 
     const payload = {
       ...formData,
@@ -109,6 +114,7 @@ const VendorFormModal = ({ onClose, initialData = null }) => {
               <select name="service_type" value={formData.service_type} onChange={handleChange} style={inputSt}>
                 <option value="Trucking">Trucking</option>
                 <option value="Forwarder">Forwarder</option>
+                <option value="Both">Forwarder + Trucking (Both)</option>
               </select>
             </div>
             <div>

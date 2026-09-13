@@ -2,8 +2,11 @@ import React from 'react';
 import Badge from '../../components/Badge';
 import { FileText, Eye, Download, Trash2 } from 'lucide-react';
 import { getUserName } from '../../utils/userLookup';
+import { useAppleModal } from '../../contexts/AppleModalContext';
 
 const DocumentTable = ({ documents, onDeleteClick }) => {
+  const { alert } = useAppleModal();
+
   if (documents.length === 0) {
     return <div style={{ padding: '48px', textAlign: 'center', color: 'var(--color-ink-muted-48)' }}>Tidak ada dokumen ditemukan</div>;
   }
@@ -46,22 +49,22 @@ const DocumentTable = ({ documents, onDeleteClick }) => {
               <td style={{ padding: '16px' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button 
-                    onClick={() => {
+                    onClick={async () => {
                       if (doc.file_path) {
                         window.open(doc.file_path, '_blank');
                       } else {
-                        alert('File tidak tersedia');
+                        await alert('File tidak tersedia');
                       }
                     }}
                     style={{ padding: '6px', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-sm)', backgroundColor: 'var(--color-canvas)', cursor: 'pointer', color: 'var(--color-ink-muted-80)' }}>
                     <Eye size={14} />
                   </button>
                   <button 
-                    onClick={() => {
+                    onClick={async () => {
                       if (doc.file_path) {
                         window.open(doc.file_path, '_blank');
                       } else {
-                        alert('File tidak tersedia');
+                        await alert('File tidak tersedia');
                       }
                     }}
                     style={{ padding: '6px', border: '1px solid var(--color-hairline)', borderRadius: 'var(--rounded-sm)', backgroundColor: 'var(--color-canvas)', cursor: 'pointer', color: 'var(--color-ink-muted-80)' }}>

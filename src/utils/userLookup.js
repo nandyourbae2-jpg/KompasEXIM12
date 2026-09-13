@@ -1,14 +1,14 @@
-import { getDummyUsers } from '../store/useAuthStore';
+import useAuthStore from '../store/useAuthStore';
 
 export const getUserName = (id) => {
   if (!id) return 'Unknown';
-  const users = getDummyUsers();
+  const users = useAuthStore.getState().allUsers || [];
   const user = users.find(u => u.id === id);
-  return user ? user.name : 'Unknown';
+  return user ? user.name || user.nama : 'Unknown';
 };
 
 export const getUserDetails = (id) => {
   if (!id) return null;
-  const users = getDummyUsers();
+  const users = useAuthStore.getState().allUsers || [];
   return users.find(u => u.id === id) || null;
 };

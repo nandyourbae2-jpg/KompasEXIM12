@@ -1,29 +1,7 @@
 import { create } from 'zustand';
+import api from '../lib/api';
+import useAuthStore from './useAuthStore';
 
-// ─── Dummy Data ─────────────────────────────────────────────────────────────
-// TSK-0085 s.d. TSK-0095, sesuai PRD bagian 7.1
-// Diperlengkapi dengan field baru Fase 5:
-//   importProjectId, notes, statusHistory
-//
-// statusHistory: array log perubahan status dengan timestamp.
-// Entry pertama selalu "Dibuat", timestamp disimulasikan secara retroaktif.
-
-const now = new Date();
-const daysAgo = (n) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000).toISOString();
-
-const initialTasks = [];
-
-// ─── Helper ──────────────────────────────────────────────────────────────────
-const generateTaskId = (tasks) => {
-  const nums = tasks.map(t => {
-    const match = t.id.match(/TSK-(\d+)/);
-    return match ? parseInt(match[1], 10) : 0;
-  });
-  const highest = nums.length > 0 ? Math.max(...nums) : 85;
-  return `TSK-${String(highest + 1).padStart(4, '0')}`;
-};
-
-// ─── Store ────────────────────────────────────────────────────────────────────
 const useTaskStore = create((set, get) => ({
   tasks: [],
   isLoading: false,
@@ -37,8 +15,47 @@ const useTaskStore = create((set, get) => ({
   fetchTasks: async () => {
     set({ isLoading: true });
     try {
-      const data = await api('/tasks');
-      set({ tasks: data.tasks || [], isLoading: false });
+      const user = useAuthStore.getState().user;
+      let queryParams = '';
+      if (user) {
+        const params = new URLSearchParams({
+          level_otoritas: user.level_otoritas,
+          departemen: user.departemen || '',
+          userId: user.id
+        });
+        queryParams = `?${params.toString()}`;
+      }
+
+      const data = await api(`/tasks${queryParams}`);
+      // Format properties for frontend
+      const formattedTasks = data.map(t => {
+        const instructionNotes = t.catatan_progress || t.deskripsi || '';
+        return {
+          id: t.id,
+          task_code: t.task_code,
+          title: t.judul,
+          deskripsi: instructionNotes,
+          department: t.departemen,
+          priority: t.prioritas,
+          status: t.status,
+          assigneeId: t.assignee_id,
+          assignee: t.assignee, // Added from backend
+          assigned_by_id: t.assigned_by_id,
+          assigned_by: t.assigned_by, // Added from backend
+          importProjectId: t.import_project_id,
+          dueDate: t.tenggat,
+          progress: t.progress,
+          notes: instructionNotes,
+          sumber_tugas: t.sumber_tugas,
+          statusHistory: t.statusHistory?.map(h => ({
+            status: h.status_ke,
+            fromStatus: h.status_dari,
+            label: h.status_dari ? `${h.status_dari} → ${h.status_ke}` : 'Dibuat',
+            timestamp: h.diubah_pada
+          })) || []
+        };
+      });
+      set({ tasks: formattedTasks, isLoading: false });
     } catch (err) {
       console.error(err);
       set({ isLoading: false, error: err.message });
@@ -46,49 +63,35 @@ const useTaskStore = create((set, get) => ({
   },
 
   addTask: async (newTaskData) => {
-    const tasks = get().tasks;
-    const id = generateTaskId(tasks);
-    const now = new Date().toISOString();
-
-    const taskData = {
-      id,
-      title: newTaskData.title,
-      department: newTaskData.department,
-      priority: newTaskData.priority,
-      status: 'Backlog',
-      assigneeId: newTaskData.assigneeId || null,
-      dueDate: newTaskData.dueDate || null,
-      importProjectId: newTaskData.importProjectId || null,
-      shipment_un: newTaskData.shipment_un || null,
-      sumber_tugas: newTaskData.sumber_tugas || 'MANUAL',
-      assigned_by_id: newTaskData.assigned_by_id || newTaskData.assigneeId,
-      notes: newTaskData.notes || '',
-      statusHistory: [
-        {
-          status: 'Backlog',
-          label: 'Dibuat',
-          timestamp: now,
-        },
-      ],
-    };
-
-    // Optimistic update
-    set(state => ({ tasks: [taskData, ...state.tasks] }));
-    
     try {
-      const created = await api('/tasks', {
+      const notesContent = newTaskData.notes || newTaskData.deskripsi || newTaskData.catatan_progress || '';
+      const payload = {
+        title: newTaskData.title,
+        notes: notesContent,
+        deskripsi: notesContent,
+        catatan_progress: notesContent,
+        department: newTaskData.department,
+        priority: newTaskData.priority,
+        status: 'Backlog',
+        sumber_tugas: newTaskData.sumber_tugas || 'Manual',
+        assigneeId: newTaskData.assigneeId ? Number(newTaskData.assigneeId) : null,
+        assigned_by_id: newTaskData.assigned_by_id ? Number(newTaskData.assigned_by_id) : (newTaskData.assigneeId ? Number(newTaskData.assigneeId) : null),
+        importProjectId: newTaskData.importProjectId || null,
+        dueDate: newTaskData.dueDate || null,
+      };
+
+      const res = await api('/tasks', {
         method: 'POST',
-        body: JSON.stringify(taskData)
+        body: JSON.stringify(payload)
       });
-      // Replace with real data (including proper relations/ids)
-      set(state => ({
-        tasks: state.tasks.map(t => t.id === id ? created : t)
-      }));
-      return created;
+      await get().fetchTasks();
+      const channel = new BroadcastChannel('exim_sync_channel');
+      channel.postMessage({ type: 'DATA_UPDATED' });
+      channel.close();
+      return res;
     } catch (err) {
-      console.error(err);
-      // Revert if error
-      set(state => ({ tasks: state.tasks.filter(t => t.id !== id) }));
+      console.error('Error adding task:', err);
+      throw err;
     }
   },
 
@@ -103,60 +106,57 @@ const useTaskStore = create((set, get) => ({
 
     const fromStatus = task.status;
     const newStatus = columns[newIndex];
-    const timestamp = new Date().toISOString();
-    const label = `${fromStatus} → ${newStatus}`;
-
-    // Optimistic Update
-    set(state => ({
-      tasks: state.tasks.map(t =>
-        t.id === taskId
-          ? {
-              ...t,
-              status: newStatus,
-              statusHistory: [...(t.statusHistory || []), { status: newStatus, label, timestamp, fromStatus }],
-            }
-          : t
-      ),
-    }));
 
     try {
       await api(`/tasks/${taskId}/move`, {
         method: 'POST',
-        body: JSON.stringify({ status: newStatus, label, fromStatus, timestamp })
+        body: JSON.stringify({
+          status: newStatus,
+          fromStatus: fromStatus,
+          label: `${fromStatus} → ${newStatus}`,
+          timestamp: new Date().toISOString(),
+          diubah_oleh_id: task.assigneeId // Simplification for prototype
+        })
       });
+      await get().fetchTasks();
+      const channel = new BroadcastChannel('exim_sync_channel');
+      channel.postMessage({ type: 'DATA_UPDATED' });
+      channel.close();
     } catch (err) {
-      console.error(err);
-      get().fetchTasks(); // Reload on error
+      console.error('Error moving task:', err);
+      throw err;
     }
   },
 
   deleteTask: async (taskId) => {
-    // Optimistic update
-    const previousTasks = get().tasks;
-    set({ tasks: previousTasks.filter(t => t.id !== taskId) });
     try {
       await api(`/tasks/${taskId}`, { method: 'DELETE' });
+      await get().fetchTasks();
+      const channel = new BroadcastChannel('exim_sync_channel');
+      channel.postMessage({ type: 'DATA_UPDATED' });
+      channel.close();
     } catch (err) {
-      console.error(err);
-      set({ tasks: previousTasks }); // Revert
+      console.error('Error deleting task:', err);
+      throw err;
     }
   },
 
   updateTaskNotes: async (taskId, notes) => {
-    // Optimistic update
-    set(state => ({
-      tasks: state.tasks.map(t =>
-        t.id === taskId ? { ...t, notes } : t
-      ),
-    }));
     try {
+      // Proteksi fallback. Jika undefined/null, kembalikan menjadi string kosong
+      const safeNotes = notes ?? ''; 
+      
       await api(`/tasks/${taskId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ notes })
+        body: JSON.stringify({ notes: safeNotes })
       });
+      await get().fetchTasks();
+      const channel = new BroadcastChannel('exim_sync_channel');
+      channel.postMessage({ type: 'DATA_UPDATED' });
+      channel.close();
     } catch (err) {
-      console.error(err);
-      get().fetchTasks();
+      console.error('Error updating task notes:', err);
+      throw err;
     }
   },
 

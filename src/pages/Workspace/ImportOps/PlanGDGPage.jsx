@@ -32,10 +32,6 @@ const PlanGDGPage = () => {
   // Computed on-read: PlanGDG = semua shipment yang belum selesai, diurutkan ETA
   // "Selesai" = gateOutWh sudah terisi di SEMUA kontainer (artinya semua barang sudah masuk gudang)
   const planRows = shipments
-    .filter(s => {
-      if (!s.containers || s.containers.length === 0) return true;
-      return s.containers.some(c => !c.gateOutWh);
-    })
     .sort((a, b) => {
       if (!a.eta && !b.eta) return 0;
       if (!a.eta) return 1;
@@ -45,7 +41,7 @@ const PlanGDGPage = () => {
     .map(s => {
       const freeTimeDate = computeFreeTime(s.eta, s.freeTimeDest);
       const freeTimeDays = freeTimeDate ? daysDiff(freeTimeDate) : null;
-      const isReady = s.containers?.length > 0 && s.containers.every(c => c.truRepoVendor && c.truWhVendor);
+      const isReady = s.containers?.length > 0 && s.containers.every(c => c.truckingRepoVendor && c.truckingWhVendor);
 
       return {
         id: s.id,

@@ -1,0 +1,13 @@
+app.get('/api/document-types', async (req, res) => {
+app.post('/api/document-types', authenticateToken, requireRole(['Manager', 'Supervisor']), validatePayload(['name']), async (req, res) => {
+app.delete('/api/document-types/:name', authenticateToken, requireRole(['Manager', 'Supervisor']), async (req, res) => {
+app.get('/api/reports', authenticateToken, authorizeDepartment(), catchErrors((req, res) => {
+app.get('/api/documents', authenticateToken, authorizeDepartment(), async (req, res) => {
+app.post('/api/documents', authenticateToken, requireRole(['Manager', 'Supervisor', 'Staff Dept']), authorizeDepartment(), (req, res, next) => {
+app.patch('/api/documents/:id', authenticateToken, requireRole(['Manager', 'Supervisor', 'Staff Dept']), async (req, res) => {
+app.post('/api/login', async (req, res) => {
+app.get('/api/tasks', authenticateToken, authorizeDepartment(), async (req, res) => {
+app.post('/api/tasks', authenticateToken, requireRole(['Manager', 'Supervisor']), validatePayload(['title', 'status']), async (req, res) => {
+app.patch('/api/tasks/:id', authenticateToken, requireRole(['Manager', 'Supervisor', 'Staff Dept']), async (req, res) => {
+app.post('/api/tasks/:id/move', authenticateToken, requireRole(['Manager', 'Supervisor', 'Staff Dept']), validatePayload(['status', 'timestamp']), async (req, res) => {
+app.delete('/api/tasks/:id', authenticateToken, requireRole(['Manager', 'Supervisor']), async (req, res) => {

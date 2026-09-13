@@ -1,48 +1,47 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import CostSection from '../../../../components/CostSection';
 import CostRollup from '../../../../components/CostRollup';
 import PaymentBadge from '../../../../components/PaymentBadge';
+import FlexibleCostSection from '../../../../components/FlexibleCostSection';
+import api from '../../../../lib/api';
 
-const Grid7 = ({ children }) => (
-  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '16px' }}>
-    {children}
-  </div>
-);
+const TabOtherCost = ({ shipmentId, updateContainerCost }) => {
+  const [generalCosts, setGeneralCosts] = useState({
+    'OTHE (Other Cost)': []
+  });
 
+  useEffect(() => {
+    const load = async () => {
+      const allCosts = await api(`/import-shipments/${shipmentId}/container-costs`);
+      const genCosts = { 'OTHE (Other Cost)': [] };
+      (Array.isArray(allCosts) ? allCosts : []).forEach(c => {
+        if (!c.container_id && genCosts[c.cost_category]) genCosts[c.cost_category].push(c);
+      });
+      setGeneralCosts(genCosts);
+    };
+    if (shipmentId) load();
+  }, [shipmentId]);
 
-const TabOtherCost = ({ shipmentId, costs, updateCost, totals }) => {
-  const up = (cat, field, val) => updateCost(cat, field, val);
-
-  const inputSt = {
-    width: '100%', padding: '9px 12px',
-    border: '1px solid var(--color-hairline)',
-    borderRadius: 'var(--rounded-sm)',
-    fontSize: '13px', fontFamily: 'var(--font-family-body)',
-    outline: 'none', backgroundColor: 'var(--color-canvas)',
-    color: 'var(--color-ink)', boxSizing: 'border-box',
-  };
-
-  const labelSt = {
-    display: 'block', fontSize: '13px', fontWeight: '600',
-    color: 'var(--color-ink)', marginBottom: '5px',
-  };
+  let totalLanded = 0;
+  let totalPlusTax = 0;
+  generalCosts['OTHE (Other Cost)'].forEach(c => {
+    totalLanded += (Number(c.dpp) || 0);
+    totalPlusTax += (Number(c.total) || 0);
+  });
 
   return (
-    <>
-      <CostSection title="OTHE (Other Cost)" total={totals.otheOtherCost.total} totalLabel="Total Other Cost (+PPN)">
-        <Grid7>
-          <div><label style={labelSt}>Vendor Name</label><input type="text" value={costs.otheOtherCost.vendorName} onChange={e => up('vendorName', e.target.value)} style={inputSt} /></div>
-          <div><label style={labelSt}>Remark</label><input type="text" value={costs.otheOtherCost.remark} onChange={e => up('remark', e.target.value)} style={inputSt} /></div>
-          <div><label style={labelSt}>Invoice <PaymentBadge shipmentId={shipmentId} categoryKey="otheOtherCost" /></label><input type="text" value={costs.otheOtherCost.invoice} onChange={e => up('invoice', e.target.value)} style={inputSt} /></div>
-          <div><label style={labelSt}>DPP</label><input type="number" value={costs.otheOtherCost.dpp} onChange={e => up('dpp', e.target.value)} style={inputSt} /></div>
-          <div><label style={labelSt}>PPN</label><input type="number" value={costs.otheOtherCost.ppn} onChange={e => up('ppn', e.target.value)} style={inputSt} /></div>
-          <div><label style={labelSt}>No. FP</label><input type="text" value={costs.otheOtherCost.noFp} onChange={e => up('noFp', e.target.value)} style={inputSt} /></div>
-          <div><label style={labelSt}>GP No</label><input type="text" value={costs.otheOtherCost.gpNo} onChange={e => up('gpNo', e.target.value)} style={inputSt} /></div>
-        </Grid7>
-      </CostSection>
+    <div style={{ padding: '0 8px' }}>
+      <FlexibleCostSection
+        title="Other Cost" category="OTHE (Other Cost)" shipmentId={shipmentId}
+        costs={generalCosts['OTHE (Other Cost)']}
+        fields={['vendor_name', 'jenis_cost', 'inv_no', 'gp_no', 'ket_other', 'dpp', 'persen_ppn', 'no_fp', 'ppn_auto']}
+        onUpdateLocal={(newArr) => setGeneralCosts({ 'OTHE (Other Cost)': newArr })}
+        updateContainerCost={updateContainerCost}
+      />
 
-      <CostRollup label="LANDED OTHER COST" value={totals.otheOtherCost.landed} />
-    </>
+      <CostRollup label="LANDED OTHER COST" value={totalLanded} />
+      <CostRollup label="TOTAL OTHER COST (+TAX)" value={totalPlusTax} isGrand />
+    </div>
   );
 };
 

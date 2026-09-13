@@ -1,12 +1,11 @@
 import React from 'react';
 import useAuthStore from '../../store/useAuthStore';
-import ImportSupervisorDashboard from './ImportSupervisorDashboard';
-import PlaceholderDashboard from './PlaceholderDashboard';
+import ControlTowerDashboard from './ControlTower';
 
 const DashboardRouter = () => {
   const { user } = useAuthStore();
   
-  return <ImportSupervisorDashboard />;
+  return <ControlTowerDashboard />;
 };
 
 export default DashboardRouter;

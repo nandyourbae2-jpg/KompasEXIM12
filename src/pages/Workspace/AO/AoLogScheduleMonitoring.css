@@ -1,0 +1,281 @@
+/* AoLogScheduleMonitoring.css */
+
+.ao-log-monitoring-container {
+  padding: 32px 40px;
+  background-color: var(--color-background, #f5f5f7);
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--color-text, #1d1d1f);
+}
+
+.ao-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.ao-title-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.ao-page-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.ao-readonly-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background-color: rgba(255, 59, 48, 0.1);
+  color: #ff3b30;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ao-page-subtitle {
+  margin: 0;
+  font-size: 15px;
+  color: #86868b;
+}
+
+.ao-active-banner {
+  background: rgba(0, 102, 204, 0.05);
+  border: 1px solid rgba(0, 102, 204, 0.15);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+  color: #0066cc;
+  font-size: 14px;
+}
+
+.ao-banner-divider {
+  margin: 0 12px;
+  color: rgba(0, 102, 204, 0.3);
+}
+
+.ao-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.ao-metric-card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.ao-metric-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(0, 102, 204, 0.08);
+  color: #0066cc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ao-metric-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.ao-metric-title {
+  font-size: 13px;
+  color: #86868b;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.ao-metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1d1d1f;
+  letter-spacing: -0.5px;
+}
+
+.ao-metric-subtitle {
+  font-size: 12px;
+  color: #86868b;
+  margin-top: 2px;
+}
+
+.ao-controls-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+
+.ao-search-wrapper {
+  position: relative;
+  flex: 1;
+  max-width: 400px;
+}
+
+.ao-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #86868b;
+}
+
+.ao-search-input {
+  width: 100%;
+  padding: 10px 16px 10px 36px;
+  border-radius: 9999px;
+  border: 1px solid #d2d2d7;
+  background: #ffffff;
+  font-size: 14px;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.ao-search-input:focus {
+  border-color: #0066cc;
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.apple-segmented-control {
+  display: flex;
+  background: #e5e5ea;
+  padding: 3px;
+  border-radius: 9px;
+}
+
+.apple-segment-btn {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1d1d1f;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.apple-segment-btn.active {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.ao-table-container {
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  border: 1px solid #f5f5f7;
+}
+
+.apple-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.apple-table th {
+  text-align: left;
+  padding: 14px 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #86868b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #f5f5f7;
+  background: #fafafc;
+}
+
+.apple-table td {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f5f5f7;
+  vertical-align: top;
+}
+
+.apple-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ao-td-main {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1d1d1f;
+  margin-bottom: 4px;
+}
+
+.ao-td-sub {
+  font-size: 12px;
+  color: #86868b;
+}
+
+.ao-status-pill {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ao-status-pill.assigned {
+  background: rgba(52, 199, 89, 0.1);
+  color: #34c759;
+}
+
+.ao-status-pill.unassigned {
+  background: rgba(255, 149, 0, 0.1);
+  color: #ff9500;
+}
+
+.apple-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #ffffff;
+  border: 1px solid #d2d2d7;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1d1d1f;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.apple-btn-secondary:hover {
+  background: #f5f5f7;
+}
+
+.apple-btn-secondary.loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ao-loading-state, .ao-empty-state, .ao-error-banner {
+  padding: 40px;
+  text-align: center;
+  color: #86868b;
+  font-size: 15px;
+}
+
+.ao-error-banner {
+  background: rgba(255, 59, 48, 0.1);
+  color: #ff3b30;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}

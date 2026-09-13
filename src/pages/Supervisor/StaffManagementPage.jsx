@@ -21,6 +21,7 @@ const StaffManagementPage = () => {
     tipe_karyawan: 'Karyawan Tetap',
     departemen: selectedDept
   });
+  const [modalError, setModalError] = useState('');
 
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, id: null, name: '' });
 
@@ -28,6 +29,7 @@ const StaffManagementPage = () => {
     setIsEditMode(false);
     setEditId(null);
     setFormData({ name: '', employee_id: '', tipe_karyawan: 'Karyawan Tetap', departemen: selectedDept });
+    setModalError('');
     setIsModalOpen(true);
   };
 
@@ -40,17 +42,23 @@ const StaffManagementPage = () => {
       tipe_karyawan: staff.tipe_karyawan,
       departemen: staff.departemen
     });
+    setModalError('');
     setIsModalOpen(true);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    if (isEditMode) {
-      updateStaff(editId, { name: formData.name, tipe_karyawan: formData.tipe_karyawan });
-    } else {
-      addStaff({ ...formData, departemen: selectedDept });
+    setModalError('');
+    try {
+      if (isEditMode) {
+        await updateStaff(editId, { name: formData.name, tipe_karyawan: formData.tipe_karyawan });
+      } else {
+        await addStaff({ ...formData, departemen: selectedDept });
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      setModalError(err.message || 'Terjadi kesalahan');
     }
-    setIsModalOpen(false);
   };
 
   const confirmDeactivate = (staff) => {
@@ -171,6 +179,11 @@ const StaffManagementPage = () => {
               <button onClick={() => setIsModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--color-slate-500)', cursor: 'pointer' }}><Plus size={20} style={{ transform: 'rotate(45deg)' }} /></button>
             </div>
             <form onSubmit={handleSave} style={{ padding: '24px' }}>
+              {modalError && (
+                <div style={{ padding: '10px 14px', marginBottom: '16px', backgroundColor: '#fee2e2', color: '#ef4444', borderRadius: '8px', fontSize: '13px', border: '1px solid #fca5a5' }}>
+                  {modalError}
+                </div>
+              )}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '500', color: 'var(--color-slate-700)' }}>Nama Lengkap</label>
                 <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--color-slate-300)', boxSizing: 'border-box' }} />
