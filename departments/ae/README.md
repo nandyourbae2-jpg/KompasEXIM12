@@ -1,37 +1,54 @@
-# Departemen AE (Account Executive / Operasional & Administrasi)
+# 📋 Departemen AE (Account Executive / Administrasi & Operasional)
 
-## 📌 Ringkasan Departemen
-Departemen Account Executive (AE) bertanggung jawab atas eksekusi operasional pesanan dari AO, administrasi dokumen pengiriman, monitoring status real-time, koordinasi penagihan (billing), pembuatan faktur/invoice, serta pencatatan biaya operasional (disbursement/job costing).
-
----
-
-## 🗺️ Pemetaan Komponen & File Terkait
-
-### 1. Frontend (User Interface)
-* **Dashboard Administrasi AE:** `src/pages/AEAdministration.jsx`, `src/pages/AEWorkboard.jsx`
-* **Invoicing & Billing:** `src/pages/InvoiceDetailPage.jsx`, `src/pages/InvoicesPage.jsx`
-* **Job Costing & Biaya:** `src/components/ae/CostingSheet.jsx`, `src/components/ae/`
-* **Dokumen Operasional:** `src/components/documents/DocumentUploader.jsx`
-
-### 2. Backend (API & Business Logic)
-* **Controller:** 
-  * `backend/src/controllers/aeAdministrationController.js`
-  * `backend/src/controllers/invoiceController.js`
-  * `backend/src/controllers/billingController.js`
-* **Service:** 
-  * `backend/src/services/AeAdministrationService.js`
-  * `backend/src/services/InvoiceService.js`
-* **Database Table:** 
-  * `ae_tasks`, `job_orders`, `invoices`, `invoice_items`, `operational_costs`
-
-### 3. Automated Test Terkait
-* Skrip E2E: `testing/e2e/ae/` dan `testing/e2e/ae-workboard.spec.js`
-* Laporan Verifikasi: `testing/reports/E2E_TEST_REPORT.md` (Bagian CUJ 3 - AE Administration & Invoicing)
+Dokumen ini memetakan arsitektur lengkap, alur bisnis, serta lokasi fisik source code (*Frontend, Backend, dan Database*) untuk seluruh modul di dalam **Departemen Account Executive (AE)**.
 
 ---
 
-## 🔄 Alur Bisnis Inti (Core User Journey)
-1. **Verifikasi Booking & Job Order:** Menerima handoff pesanan dari AO dan memeriksa kelengkapan terms.
-2. **Koordinasi Operasional & Dokumen:** Mengunggah dokumen resmi (B/L, Commercial Invoice, Packing List).
-3. **Pencatatan Biaya (Actual Costing):** Mencatat tagihan dari shipping line, depo kontainer, dan pihak ketiga.
-4. **Billing & Invoice Generation:** Menerbitkan faktur resmi kepada pelanggan serta sinkronisasi status pembayaran dengan Finance.
+## 🧭 1. Workspace Staff AE
+
+### 1.1 AE Workboard & Sequential Action Engine
+* **URL:** `#/workspace/ae/workboard`
+* **Deskripsi:** Eksekusi sekuensial aktivitas penanganan dokumen operasional ekspor dan job order.
+* **Frontend:**
+  * Component: `src/pages/Staff/AeWorkboard.jsx`
+  * Action Engine: `src/pages/Staff/ActionFormEngine.jsx`
+  * Handover Dokumen: `src/pages/Staff/AeHandover.jsx`
+* **Backend:**
+  * Controller: `backend/src/controllers/aeWorkboardController.js`
+  * Engine: `backend/src/services/AeWorkflowEngine.js`
+* **Tabel Database:** `ae_tasks`, `ae_activities`, `job_orders`
+
+### 1.2 Documents Control Hub
+* **URL:** `#/workspace/ae/documents`
+* **Deskripsi:** Verifikasi dan kontrol dokumen resmi ekspor (Commercial Invoice, Packing List, Shipping Instructions).
+* **Frontend:** `src/pages/Workspace/AE/AeDocumentControlHub.jsx`, `AeDocumentControl.jsx`, `AeDocumentArchivePage.jsx`
+* **Backend:** `backend/src/routes/v1/documents.js`
+
+### 1.3 Waiting / Blocked & Follow Up Center
+* **URL:** `#/workspace/ae/waiting`
+* **Deskripsi:** Monitoring dokumen atau aktivitas yang tertunda (blocked), eskalasi isu, dan tindak lanjut ke agen/klien.
+* **Frontend:** `src/pages/Workspace/AE/AeWaiting.jsx`, `AeFollowUpCenter.jsx`, `AeIssueCenter.jsx`
+
+### 1.4 Activity History
+* **URL:** `#/workspace/ae/history`
+* **Deskripsi:** Riwayat audit log seluruh mutasi dokumen dan tindakan staf AE.
+* **Frontend:** `src/pages/Workspace/AE/AeActivityHistory.jsx`
+
+---
+
+## 🛡️ 2. Supervisor AE (Control Tower)
+
+### 2.1 AE Control Tower
+* **URL:** `#/workspace/ae/supervisor`
+* **Deskripsi:** Dashboard metrik SLA dokumen ekspor dan monitoring beban kerja tim AE.
+* **Frontend:** `src/pages/Supervisor/AeControlTower.jsx`, `src/pages/Workspace/AE/AeDashboard.jsx`
+
+### 2.2 AE Assignment Board
+* **Deskripsi:** Distribusi berkas job order ke staf AE.
+* **Frontend:** `src/pages/Workspace/Management/SpvAE/AeAssignmentBoard.jsx`
+
+### 2.3 Log Schedule Source & Match Review Center
+* **Deskripsi:** Pengelolaan sumber jadwal logistik dan rekonsiliasi data manifest.
+* **Frontend:**
+  * Source Management: `src/pages/Workspace/SourceManagement/SourceManagementPage.jsx`
+  * Match Review: `src/pages/Workspace/SourceManagement/MatchReviewCenter.jsx`
