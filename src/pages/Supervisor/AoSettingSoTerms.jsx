@@ -483,6 +483,11 @@ export default function AoSettingSoTerms() {
                       {job.destination && <span style={{ color: '#86868b', fontWeight: 400 }}> · {job.destination}</span>}
                     </div>
 
+                    {/* Assignee AO */}
+                    <div style={{ fontSize: 11, color: '#0066cc', fontWeight: 600, marginTop: 4 }}>
+                      AO: {job.ao_assignee_name || 'Belum di-assign'}
+                    </div>
+
                     {/* Footer Row: Vessel & Status Chip */}
                     <div className="so-invoice-footer">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, maxWidth: 170, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

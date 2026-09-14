@@ -204,7 +204,7 @@ class AoWorkboardController {
 
       db.transaction(() => {
         // Build update query dynamically
-        let updates = ['updated_at = datetime("now")'];
+        let updates = ['updated_at = datetime(\'now\')'];
         let params = [];
         
         if (assigned_to !== undefined) {
@@ -266,7 +266,7 @@ class AoWorkboardController {
 
       db.transaction(() => {
         db.prepare(`INSERT OR IGNORE INTO ao_job_context (job_id) VALUES (?)`).run(job_id);
-        db.prepare(`UPDATE ao_job_context SET operational_alerts = ?, updated_at = datetime("now") WHERE job_id = ?`).run(operational_alerts, job_id);
+        db.prepare(`UPDATE ao_job_context SET operational_alerts = ?, updated_at = datetime('now') WHERE job_id = ?`).run(operational_alerts, job_id);
       })();
 
       res.json({ success: true, message: 'Operational alerts updated' });
