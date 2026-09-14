@@ -355,14 +355,27 @@ class AoWorkboardController {
           }
 
           // Generate tugas kelengkapan dokumen di ao_tasks untuk Staf AO
-          if (Array.isArray(document_checklists) && document_checklists.length > 0) {
+          if (Array.isArray(document_checklists)) {
             const stmtGetExisting = db.prepare('SELECT id, assigned_to FROM ao_tasks WHERE job_id = ? AND task_type = ?');
             const stmtInsert = db.prepare(`
               INSERT INTO ao_tasks (job_id, workstream, task_type, description, assigned_to, status, priority, due_date)
               VALUES (?, 'DOC', ?, ?, ?, 'PENDING', 'NORMAL', date('now', '+2 days'))
             `);
             const stmtUpdateAssignee = db.prepare('UPDATE ao_tasks SET assigned_to = ? WHERE id = ?');
+            const stmtDelete = db.prepare('DELETE FROM ao_tasks WHERE id = ?');
 
+            // 1. Dapatkan daftar task kelengkapan saat ini
+            const existingTasks = db.prepare("SELECT id, task_type FROM ao_tasks WHERE job_id = ? AND workstream = 'DOC' AND task_type LIKE 'Kelengkapan %'").all(job_id);
+            const newDocNames = new Set(document_checklists.map(doc => `Kelengkapan ${doc.name}`));
+
+            // 2. Hapus task lama yang sudah tidak ada di matrix baru
+            for (const task of existingTasks) {
+              if (!newDocNames.has(task.task_type)) {
+                stmtDelete.run(task.id);
+              }
+            }
+
+            // 3. Tambahkan atau update task yang ada di matrix baru
             for (const doc of document_checklists) {
               const taskType = `Kelengkapan ${doc.name}`;
               const existing = stmtGetExisting.get(job_id, taskType);
