@@ -9,55 +9,34 @@ Platform **KOMPAS EXIM** adalah sistem Enterprise Resource Planning (ERP) kompre
 
 ---
 
-## 🏢 Struktur Organisasi & Modul (Per Departemen)
+## 🏢 Struktur Organisasi & Modul (Folder `departments/`)
 
-Platform ini mengadopsi arsitektur yang sangat modular dengan pemisahan Hak Akses (RBAC) yang ketat antar departemen operasional utama:
+Platform ini mengadopsi arsitektur modular dengan pemisahan direktori per departemen operasional di folder **`departments/`**:
 
-### 1. Departemen IMPORT
-Fokus pada kliring pabean impor, penagihan, dan pengeluaran barang.
-- **Modul**: Manajemen Proyek Impor, Sinkronisasi PIB ke OTHE, Financial Request & Payment Gate, Integritas Task Assignee, Aturan Pengecualian Realisasi MTB.
-- 📍 *Frontend*: `src/pages/Workspace/ImportOps/`, `src/pages/Workspace/PibRequest/`
-- 📍 *Backend*: `backend/src/routes/v1/importOperations.js`
-
-### 2. Departemen AO (Administration Officer)
-Fokus pada manajemen tugas administratif, penugasan, dan delegasi SLA.
-- **Modul**: Kanban Workboard Multi-Tahap (Apple-Style Date Pill), Pengajuan Kasbon dari PIB Request, Peta Tugas & Delegasi.
-- 📍 *Frontend*: `src/pages/Staff/AoWorkboard.jsx`
-- 📍 *Backend*: `backend/src/controllers/aoWorkboardController.js`
-
-### 3. Departemen AE (Account Executive)
-Fokus pada kepatuhan urutan dokumen, interaksi klien, dan serah terima dokumen legal.
-- **Modul**: Sequential Checklist Execution Engine, Siklus Serah Terima Dokumen (Chain of Custody), Meja Kerja Terpadu & Notifikasi Klien.
-- 📍 *Frontend*: `src/pages/Staff/ActionFormEngine.jsx`, `src/pages/Staff/AeHandover.jsx`
-- 📍 *Backend*: `backend/src/services/AeWorkflowEngine.js`
-
-### 4. Departemen EXPORT
-Fokus pada siklus kargo ekspor dan dokumen pabean PEB/COO.
-- **Modul**: Manajemen Dokumen Ekspor (PEB/BL/COO), Peta Tugas Operasional Ekspor, Pelacakan Status Pengapalan.
-- 📍 *Frontend*: `src/pages/Workspace/DocumentMap.jsx` (Filter: Export)
-- 📍 *Backend*: Terintegrasi pada modul Tasks dan Documents inti.
-
-### 5. Departemen Pendukung (Cross-Functional)
-- **Finance**: Modul Realisasi Dana, Kasbon, dan Approval Tagihan Vendor.
-- **Logistik**: Pelacakan Status Shipment & Validasi Segel Kontainer.
-- **Manager**: Dashboard Eksekutif, Analitik Waktu Tunggu (Dwell Time), dan Utilasi Staf.
+- 🚢 **[Departemen IMPORT](departments/import/README.md)** : Kliring pabean impor (PIB), pengeluaran kontainer (DO), & financial request.
+- 🎯 **[Departemen AO](departments/ao/README.md)** : Kanban Workboard (Account Officer), pipeline prospek, & manajemen tugas SLA.
+- 📋 **[Departemen AE](departments/ae/README.md)** : Sequential checklist dokumen, interaksi klien, & administrasi job order.
+- 🌍 **[Departemen EXPORT](departments/export/README.md)** : Siklus kargo ekspor, pabean PEB/NPE, & booking space kapal/udara.
 
 ---
 
-## 📚 Dokumentasi Resmi IT
+## 🧪 Pengujian Sistem & QA (Folder `testing/`)
 
-Semua dokumentasi arsitektur, basis data, API, SOP bisnis, dan hasil pengujian E2E dapat ditemukan di dalam direktori `docs/`:
+Semua skrip otomasi pengujian dan bukti kelulusan pengujian terpusat di dalam folder **`testing/`**:
+- 📊 **[Laporan Eksekutif E2E (16/16 Skenario Passed)](testing/reports/E2E_TEST_REPORT.md)**
+- 🛠️ **[Panduan Menjalankan Pengujian (Execution Guide)](testing/reports/E2E_EXECUTION_GUIDE.md)**
+- 🧩 **[Matriks Pemetaan SOP ke Playwright (Test Matrix)](testing/reports/TEST_MATRIX.md)**
+- 📁 **[Skrip Automated Test Playwright](testing/e2e/)**
 
+---
+
+## 📚 Dokumentasi Arsitektur & SOP IT (Folder `docs/`)
+
+Semua dokumentasi arsitektur, basis data, API, dan SOP bisnis dapat ditemukan di direktori `docs/`:
 - 🗺️ **[Arsitektur Sistem & Layering](docs/Architecture.md)**
 - 📖 **[SOP Alur Bisnis](docs/SOP/SIMULATION_SOP.md)**
 - 🗄️ **[Kamus Database & ERD](docs/Database/)**
 - 🛡️ **[Matriks Keamanan RBAC](docs/Authorization_Matrix.md)**
-
-### 🎯 Hasil Pengujian End-to-End (E2E)
-Departemen IT mewajibkan laporan pengujian terpadu. Silakan rujuk modul di bawah ini untuk melihat metrik 100% kelulusan skenario:
-- 📊 **[Laporan Eksekutif E2E (16/16 Skenario Passed)](docs/Testing/E2E_TEST_REPORT.md)**
-- 🛠️ **[Panduan Menjalankan Pengujian (Execution Guide)](docs/Testing/E2E_EXECUTION_GUIDE.md)**
-- 🧩 **[Matriks Pemetaan SOP ke Playwright (Test Matrix)](docs/Testing/TEST_MATRIX.md)**
 
 ---
 
