@@ -341,16 +341,45 @@ class AoWorkboardController {
         }
 
         if (updates.length > 0) {
-          updates.push('updated_at = datetime("now")');
+          updates.push("updated_at = datetime('now')");
           params.push(job_id);
           db.prepare(`UPDATE ao_job_context SET ${updates.join(', ')} WHERE job_id = ?`).run(...params);
         }
+
+        // Sinkronisasi otomatis ke Staff AO terkait (Tasks & Status)
+        const job = db.prepare('SELECT id, invoice_no, ao_assignee_id, ao_status FROM export_jobs WHERE id = ?').get(job_id);
+        if (job && job.ao_assignee_id) {
+          // Update status AO ke In Progress jika belum aktif
+          if (['Pending', 'Not Started'].includes(job.ao_status)) {
+            db.prepare("UPDATE export_jobs SET ao_status = 'In Progress', updated_at = datetime('now') WHERE id = ?").run(job_id);
+          }
+
+          // Generate tugas kelengkapan dokumen di ao_tasks untuk Staf AO
+          if (Array.isArray(document_checklists) && document_checklists.length > 0) {
+            const stmtGetExisting = db.prepare('SELECT id, assigned_to FROM ao_tasks WHERE job_id = ? AND task_type = ?');
+            const stmtInsert = db.prepare(`
+              INSERT INTO ao_tasks (job_id, workstream, task_type, description, assigned_to, status, priority, due_date)
+              VALUES (?, 'DOC', ?, ?, ?, 'PENDING', 'NORMAL', date('now', '+2 days'))
+            `);
+            const stmtUpdateAssignee = db.prepare('UPDATE ao_tasks SET assigned_to = ? WHERE id = ?');
+
+            for (const doc of document_checklists) {
+              const taskType = `Kelengkapan ${doc.name}`;
+              const existing = stmtGetExisting.get(job_id, taskType);
+              if (!existing) {
+                stmtInsert.run(job_id, taskType, `Instruksi SO Terms (${doc.category || 'Dokumen'}): ${doc.name}. ${reminder_notes || ''}`, job.ao_assignee_id);
+              } else if (!existing.assigned_to) {
+                stmtUpdateAssignee.run(job.ao_assignee_id, existing.id);
+              }
+            }
+          }
+        }
       })();
 
-      res.json({ success: true, message: 'Doc Plan berhasil diperbarui' });
+      res.json({ success: true, message: 'SO Terms & Matrix Dokumen berhasil disimpan dan diteruskan ke Staf AO' });
     } catch (error) {
       console.error('Error in updateDocPlan:', error);
-      res.status(500).json({ success: false, message: 'Gagal update Doc Plan' });
+      res.status(500).json({ success: false, message: 'Gagal update Doc Plan: ' + error.message });
     }
   }
 
