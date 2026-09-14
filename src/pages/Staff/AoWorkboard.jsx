@@ -323,10 +323,10 @@ const TRACKING_CATEGORIES = [
 ];
 
 const STAGES = [
-  { key: 'PREPARATION', label: '1. Preparation', step: 1 },
-  { key: 'DRAFT', label: '2. Draft', step: 2 },
-  { key: 'FINAL_DRAFT', label: '3. Final Draft', step: 3 },
-  { key: 'ORIGINAL', label: '4. Original', step: 4 },
+  { key: 'PREPARATION', label: '1. Email Draft', step: 1 },
+  { key: 'DRAFT', label: '2. Email Ori', step: 2 },
+  { key: 'FINAL_DRAFT', label: '3. Telex', step: 3 },
+  { key: 'ORIGINAL', label: '4. Courier', step: 4 },
   { key: 'SUBMIT_BANK', label: '5. Submit Bank', step: 5 },
   { key: 'COMPLETED', label: '6. Completed', step: 6 },
 ];
@@ -339,6 +339,9 @@ const AoInlineWorkstation = ({ job, onClose, onSaved }) => {
     remarks: job.remarks || '',
     email_draft_date: job.email_draft_date ? job.email_draft_date.split('T')[0] : '',
     email_ori_date: job.email_ori_date ? job.email_ori_date.split('T')[0] : '',
+    telex_date: job.telex_date ? job.telex_date.split('T')[0] : '',
+    courier_date: job.courier_date ? job.courier_date.split('T')[0] : '',
+    submit_bank_date: job.submit_bank_date ? job.submit_bank_date.split('T')[0] : '',
     cc_due_date: job.cc_due_date ? job.cc_due_date.split('T')[0] : '',
     cc_done_date: job.cc_done_date ? job.cc_done_date.split('T')[0] : '',
     dscs_due_date: job.dscs_due_date ? job.dscs_due_date.split('T')[0] : '',
@@ -595,6 +598,28 @@ const AoInlineWorkstation = ({ job, onClose, onSaved }) => {
               </button>
             );
           })}
+        </div>
+        <div style={{ display: 'flex', gap: '12px', marginTop: '16px', overflowX: 'auto', paddingBottom: '8px' }}>
+          <div style={{ flex: '1', minWidth: '130px' }}>
+            <label className="ao-wb-mini-label" style={{ display: 'block', marginBottom: '6px', fontSize: '11px', color: '#64748b' }}>Tgl Email Draft</label>
+            <input type="date" className="ao-wb-input" value={form.email_draft_date || ''} onChange={e => set('email_draft_date', e.target.value)} />
+          </div>
+          <div style={{ flex: '1', minWidth: '130px' }}>
+            <label className="ao-wb-mini-label" style={{ display: 'block', marginBottom: '6px', fontSize: '11px', color: '#64748b' }}>Tgl Email Ori</label>
+            <input type="date" className="ao-wb-input" value={form.email_ori_date || ''} onChange={e => set('email_ori_date', e.target.value)} />
+          </div>
+          <div style={{ flex: '1', minWidth: '130px' }}>
+            <label className="ao-wb-mini-label" style={{ display: 'block', marginBottom: '6px', fontSize: '11px', color: '#64748b' }}>Tgl Telex</label>
+            <input type="date" className="ao-wb-input" value={form.telex_date || ''} onChange={e => set('telex_date', e.target.value)} />
+          </div>
+          <div style={{ flex: '1', minWidth: '130px' }}>
+            <label className="ao-wb-mini-label" style={{ display: 'block', marginBottom: '6px', fontSize: '11px', color: '#64748b' }}>Tgl Courier</label>
+            <input type="date" className="ao-wb-input" value={form.courier_date || ''} onChange={e => set('courier_date', e.target.value)} />
+          </div>
+          <div style={{ flex: '1', minWidth: '130px' }}>
+            <label className="ao-wb-mini-label" style={{ display: 'block', marginBottom: '6px', fontSize: '11px', color: '#64748b' }}>Tgl Submit Bank</label>
+            <input type="date" className="ao-wb-input" value={form.submit_bank_date || ''} onChange={e => set('submit_bank_date', e.target.value)} />
+          </div>
         </div>
       </div>
 
@@ -1525,8 +1550,11 @@ const JobRow = ({ job, isExpanded, onToggle }) => {
       <td>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {job.email_draft_date && <span className="ao-wb-date-chip"><Send size={10} /> Draft {fmtDate(job.email_draft_date)}</span>}
-          {job.email_ori_date && <span className="ao-wb-date-chip done"><Send size={10} /> ORI {fmtDate(job.email_ori_date)}</span>}
-          {!job.email_draft_date && !job.email_ori_date && <span style={{ fontSize: 11, color: '#c7c7cc' }}>—</span>}
+          {job.email_ori_date && <span className="ao-wb-date-chip"><Send size={10} /> ORI {fmtDate(job.email_ori_date)}</span>}
+          {job.telex_date && <span className="ao-wb-date-chip"><Send size={10} /> Telex {fmtDate(job.telex_date)}</span>}
+          {job.courier_date && <span className="ao-wb-date-chip"><Send size={10} /> Courier {fmtDate(job.courier_date)}</span>}
+          {job.submit_bank_date && <span className="ao-wb-date-chip done"><Send size={10} /> Bank {fmtDate(job.submit_bank_date)}</span>}
+          {!job.email_draft_date && !job.email_ori_date && !job.telex_date && !job.courier_date && !job.submit_bank_date && <span style={{ fontSize: 11, color: '#c7c7cc' }}>—</span>}
         </div>
       </td>
       <td>

@@ -4,10 +4,10 @@ import { useAoStore } from '../../../store/useAoStore';
 
 const STAGES = ['PREPARATION', 'DRAFT', 'FINAL_DRAFT', 'ORIGINAL', 'SUBMIT_BANK'];
 const STAGE_LABELS = {
-  PREPARATION: '1. Preparation',
-  DRAFT: '2. Draft',
-  FINAL_DRAFT: '3. Final Draft',
-  ORIGINAL: '4. Original',
+  PREPARATION: '1. Email Draft',
+  DRAFT: '2. Draft (Ori)',
+  FINAL_DRAFT: '3. Telex',
+  ORIGINAL: '4. Courier',
   SUBMIT_BANK: '5. Submit Bank'
 };
 
@@ -24,6 +24,7 @@ const AoDocumentStagesMonitor = () => {
   const [search, setSearch] = useState('');
   const [selectedStaff, setSelectedStaff] = useState('ALL');
   const [selectedStage, setSelectedStage] = useState('ALL');
+  const [selectedDate, setSelectedDate] = useState('');
 
   const filteredJobs = useMemo(() => {
     let list = stagesMonitoring || [];
@@ -45,8 +46,29 @@ const AoDocumentStagesMonitor = () => {
       );
     }
     
+    if (selectedDate) {
+      list = list.filter(j => {
+        if (selectedStage !== 'ALL') {
+          // If a specific stage is selected, match against its specific date
+          if (selectedStage === 'PREPARATION' && (j.email_draft_date || '').startsWith(selectedDate)) return true;
+          if (selectedStage === 'DRAFT' && (j.email_ori_date || '').startsWith(selectedDate)) return true;
+          if (selectedStage === 'FINAL_DRAFT' && (j.telex_date || '').startsWith(selectedDate)) return true;
+          if (selectedStage === 'ORIGINAL' && (j.courier_date || '').startsWith(selectedDate)) return true;
+          if (selectedStage === 'SUBMIT_BANK' && (j.submit_bank_date || '').startsWith(selectedDate)) return true;
+          return false;
+        } else {
+          // Match against any of the 5 dates
+          return (j.email_draft_date || '').startsWith(selectedDate) ||
+                 (j.email_ori_date || '').startsWith(selectedDate) ||
+                 (j.telex_date || '').startsWith(selectedDate) ||
+                 (j.courier_date || '').startsWith(selectedDate) ||
+                 (j.submit_bank_date || '').startsWith(selectedDate);
+        }
+      });
+    }
+
     return list;
-  }, [stagesMonitoring, selectedStaff, selectedStage, search]);
+  }, [stagesMonitoring, selectedStaff, selectedStage, search, selectedDate]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -85,6 +107,21 @@ const AoDocumentStagesMonitor = () => {
             <option key={s} value={s}>{STAGE_LABELS[s]}</option>
           ))}
         </select>
+        
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={e => setSelectedDate(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '13px', backgroundColor: '#fff', outline: 'none', color: selectedDate ? '#0f172a' : '#94a3b8' }}
+        />
+        {selectedDate && (
+          <button 
+            onClick={() => setSelectedDate('')}
+            style={{ padding: '6px', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '12px', textDecoration: 'underline' }}
+          >
+            Clear Date
+          </button>
+        )}
       </div>
       
       {/* List */}

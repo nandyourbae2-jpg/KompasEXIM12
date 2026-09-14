@@ -445,6 +445,7 @@ class AoWorkboardController {
           c.operational_alerts, c.operational_status, c.current_action,
           c.pending_docs, c.remarks,
           c.email_draft_date, c.email_ori_date,
+          c.telex_date, c.courier_date, c.submit_bank_date,
           c.dscs_due_date, c.dscs_done_date, c.dscs_status,
           c.cc_due_date, c.cc_done_date,
           c.courier_status, c.bank_submission_status,
@@ -482,6 +483,7 @@ class AoWorkboardController {
       const {
         operational_status, current_action, pending_docs, remarks,
         email_draft_date, email_ori_date,
+        telex_date, courier_date, submit_bank_date,
         cc_due_date, cc_done_date,
         dscs_due_date, dscs_done_date, dscs_status,
         courier_status, bank_submission_status,
@@ -509,6 +511,9 @@ class AoWorkboardController {
             remarks = COALESCE(?, remarks),
             email_draft_date = COALESCE(?, email_draft_date),
             email_ori_date = COALESCE(?, email_ori_date),
+            telex_date = COALESCE(?, telex_date),
+            courier_date = COALESCE(?, courier_date),
+            submit_bank_date = COALESCE(?, submit_bank_date),
             cc_due_date = COALESCE(?, cc_due_date),
             cc_done_date = COALESCE(?, cc_done_date),
             dscs_due_date = COALESCE(?, dscs_due_date),
@@ -525,6 +530,7 @@ class AoWorkboardController {
         `).run(
           operational_status, current_action, pending_docs, remarks,
           email_draft_date, email_ori_date,
+          telex_date, courier_date, submit_bank_date,
           cc_due_date, cc_done_date,
           dscs_due_date, dscs_done_date, dscs_status,
           courier_status, bank_submission_status,
@@ -1056,7 +1062,7 @@ class AoWorkboardController {
   // Returns all active AO jobs with 5-stage document progress, filterable by staff and stage
   static getStagesMonitoring(req, res) {
     try {
-      const { staff_id, stage, search } = req.query;
+      const { staff_id, stage, search, stage_date } = req.query;
 
       let whereClause = `WHERE j.ao_assignee_id IS NOT NULL AND j.ao_status NOT IN ('Cancelled')`;
       let params = [];
@@ -1071,6 +1077,29 @@ class AoWorkboardController {
       if (stage) {
         whereClause += ` AND c.document_stage = ?`;
         params.push(stage);
+      }
+      if (stage_date) {
+        // If a specific stage is selected, filter on its specific date column.
+        // Otherwise, filter if ANY of the 5 dates match the given date.
+        if (stage === 'PREPARATION') {
+          whereClause += ` AND c.email_draft_date = ?`;
+          params.push(stage_date);
+        } else if (stage === 'DRAFT') {
+          whereClause += ` AND c.email_ori_date = ?`;
+          params.push(stage_date);
+        } else if (stage === 'FINAL_DRAFT') {
+          whereClause += ` AND c.telex_date = ?`;
+          params.push(stage_date);
+        } else if (stage === 'ORIGINAL') {
+          whereClause += ` AND c.courier_date = ?`;
+          params.push(stage_date);
+        } else if (stage === 'SUBMIT_BANK') {
+          whereClause += ` AND c.submit_bank_date = ?`;
+          params.push(stage_date);
+        } else {
+          whereClause += ` AND (? IN (c.email_draft_date, c.email_ori_date, c.telex_date, c.courier_date, c.submit_bank_date))`;
+          params.push(stage_date);
+        }
       }
       if (search) {
         whereClause += ` AND (j.invoice_no LIKE ? OR j.buyer LIKE ? OR j.vessel LIKE ?)`;
@@ -1089,6 +1118,7 @@ class AoWorkboardController {
           c.document_stage, c.document_checklists,
           c.terms_incoterm, c.terms_payment,
           c.eta_update, c.atd as ao_atd,
+          c.email_draft_date, c.email_ori_date, c.telex_date, c.courier_date, c.submit_bank_date,
           c.dscs_status, c.dscs_due_date, c.dscs_done_date,
           c.operational_status, c.operational_alerts
         FROM export_jobs j
