@@ -37,27 +37,38 @@ if (reset) {
 if (reset || seedOnly) {
   console.log('Seeding data...');
 
+  const bcrypt = require('bcrypt');
+  const defaultPasswordHash = bcrypt.hashSync('123456', 10);
+
   db.transaction(() => {
     // SEED USERS
     const insertUser = db.prepare(`
-      INSERT INTO users (id, employee_id, nama, level_otoritas, departemen, tipe_karyawan, password_hash) 
+      INSERT OR REPLACE INTO users (id, employee_id, nama, level_otoritas, departemen, tipe_karyawan, password_hash) 
       VALUES (@id, @employee_id, @nama, @level_otoritas, @departemen, @tipe_karyawan, @password_hash)
     `);
     const users = [
-      { id: 1, employee_id: "MGR-001", nama: "Bapak Manager", level_otoritas: "Manager", departemen: null, tipe_karyawan: "Karyawan Tetap", password_hash: "password123" },
-      { id: 2, employee_id: "SPV-IMP-01", nama: "Bapak SPV Import", level_otoritas: "Supervisor", departemen: "Import", tipe_karyawan: "Karyawan Tetap", password_hash: "password123" },
-      { id: 3, employee_id: "SPV-EXP-01", nama: "Ibu SPV Export", level_otoritas: "Supervisor", departemen: "Export", tipe_karyawan: "Karyawan Tetap", password_hash: "password123" },
-      { id: 4, employee_id: "EXIM-IMP-02", nama: "Yoda", level_otoritas: "Staff Dept", departemen: "Import", tipe_karyawan: "Karyawan Tetap", password_hash: "password123" },
-      { id: 5, employee_id: "EXIM-IMP-03", nama: "Katon", level_otoritas: "Staff Dept", departemen: "Import", tipe_karyawan: "Karyawan Tetap", password_hash: "password123" },
-      { id: 6, employee_id: "EXIM-IMP-04", nama: "Thomas", level_otoritas: "Staff Dept", departemen: "Import", tipe_karyawan: "Karyawan Tetap", password_hash: "password123" },
-      { id: 7, employee_id: "EXIM-IMP-05", nama: "Keenand", level_otoritas: "Staff Dept", departemen: "Import", tipe_karyawan: "Karyawan Magang", password_hash: "password123" },
-      { id: 8, employee_id: "EXIM-EXP-01", nama: "Andi", level_otoritas: "Staff Dept", departemen: "Export", tipe_karyawan: "Karyawan Tetap", password_hash: "password123" }
+      { id: 1, employee_id: "MGR-001", nama: "Bapak Manager", level_otoritas: "Manager", departemen: null, tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 2, employee_id: "SPV-IMP-01", nama: "Bapak SPV Import", level_otoritas: "Supervisor", departemen: "Import", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 3, employee_id: "SPV-EXP-01", nama: "Ibu SPV Export", level_otoritas: "Supervisor", departemen: "Export", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 4, employee_id: "EXIM-IMP-02", nama: "Yoda", level_otoritas: "Staff Dept", departemen: "Import", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 5, employee_id: "EXIM-IMP-03", nama: "Katon", level_otoritas: "Staff Dept", departemen: "Import", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 6, employee_id: "EXIM-IMP-04", nama: "Thomas", level_otoritas: "Staff Dept", departemen: "Import", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 7, employee_id: "EXIM-IMP-05", nama: "Keenand", level_otoritas: "Staff Dept", departemen: "Import", tipe_karyawan: "Karyawan Magang", password_hash: defaultPasswordHash },
+      { id: 8, employee_id: "EXIM-EXP-01", nama: "Andi", level_otoritas: "Staff Dept", departemen: "Export", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 101, employee_id: "AE-001", nama: "Monica", level_otoritas: "Staff Dept", departemen: "Administrasi Export", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 102, employee_id: "SPV-AE-001", nama: "Amal", level_otoritas: "Supervisor", departemen: "Administrasi Export", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 104, employee_id: "SPV-AO-01", nama: "Vicky", level_otoritas: "Supervisor", departemen: "Account Officer", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 105, employee_id: "EXIM-AO-01", nama: "Tren", level_otoritas: "Staff Dept", departemen: "Account Officer", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 106, employee_id: "EXIM-AO-02", nama: "Bella", level_otoritas: "Staff Dept", departemen: "Account Officer", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 107, employee_id: "AE-002", nama: "Wenny", level_otoritas: "Staff Dept", departemen: "Administrasi Export", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 108, employee_id: "AE-003", nama: "Ama", level_otoritas: "Staff Dept", departemen: "Administrasi Export", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash },
+      { id: 115, employee_id: "DSCS-01", nama: "Erica", level_otoritas: "Staff Dept", departemen: "Account Officer", tipe_karyawan: "Karyawan Tetap", password_hash: defaultPasswordHash }
     ];
     users.forEach(u => insertUser.run(u));
 
     // SEED VENDORS
     const insertVendor = db.prepare(`
-      INSERT INTO vendors (id, nama, service_type, region, rating) 
+      INSERT OR REPLACE INTO vendors (id, nama, service_type, region, rating) 
       VALUES (@id, @nama, @service_type, @region, @rating)
     `);
     const vendors = [
@@ -80,7 +91,7 @@ if (reset || seedOnly) {
 
     // SEED JOB ORDERS
     const insertJobOrder = db.prepare(`
-      INSERT INTO job_orders (id, job_order_code, vendor_id, cost_type, total_invoice, total_paid) 
+      INSERT OR REPLACE INTO job_orders (id, job_order_code, vendor_id, cost_type, total_invoice, total_paid) 
       VALUES (@id, @job_order_code, @vendor_id, @cost_type, @total_invoice, @total_paid)
     `);
     const jobOrders = [
@@ -93,7 +104,7 @@ if (reset || seedOnly) {
 
     // SEED PAYMENT LOGS
     const insertPaymentLog = db.prepare(`
-      INSERT INTO payment_logs (job_order_id, jumlah_bayar, tanggal_bayar, metode, dicatat_oleh_id) 
+      INSERT OR IGNORE INTO payment_logs (job_order_id, jumlah_bayar, tanggal_bayar, metode, dicatat_oleh_id) 
       VALUES (@job_order_id, @jumlah_bayar, @tanggal_bayar, @metode, @dicatat_oleh_id)
     `);
     insertPaymentLog.run({ job_order_id: 1, jumlah_bayar: 10000000, tanggal_bayar: "2026-07-20", metode: "Bank Transfer", dicatat_oleh_id: 1 });
@@ -104,7 +115,7 @@ if (reset || seedOnly) {
 
     // SEED REPORTS
     const insertReport = db.prepare(`
-      INSERT INTO reports (id, tipe, judul, isi, departemen, dibuat_oleh_id, problem_report_id) 
+      INSERT OR REPLACE INTO reports (id, tipe, judul, isi, departemen, dibuat_oleh_id, problem_report_id) 
       VALUES (@id, @tipe, @judul, @isi, @departemen, @dibuat_oleh_id, @problem_report_id)
     `);
     const reports = [
@@ -116,7 +127,7 @@ if (reset || seedOnly) {
 
     // SEED MASTER DATA DOKUMEN (12 docs per PRD)
     const insertMasterDoc = db.prepare(`
-      INSERT INTO master_data_dokumen (kode_dokumen, nama_dokumen) VALUES (@kode_dokumen, @nama_dokumen)
+      INSERT OR IGNORE INTO master_data_dokumen (kode_dokumen, nama_dokumen) VALUES (@kode_dokumen, @nama_dokumen)
     `);
     const masterDocs = [
       { kode_dokumen: 'DOC-001', nama_dokumen: 'Bill of Lading Original' },
@@ -136,7 +147,7 @@ if (reset || seedOnly) {
 
     // SEED MASTER DATA DEPARTEMEN
     const insertDept = db.prepare(`
-      INSERT INTO master_data_departemen (nama_departemen) VALUES (@nama_departemen)
+      INSERT OR IGNORE INTO master_data_departemen (nama_departemen) VALUES (@nama_departemen)
     `);
     const depts = [
       { nama_departemen: 'Import' },
