@@ -176,7 +176,7 @@ const AoDocumentStagesMonitor = () => {
                       <React.Fragment key={stg}>
                         <div style={{
                           flex: isActive ? '1.5' : '1',
-                          height: '32px',
+                          height: '42px',
                           borderRadius: '8px',
                           display: 'flex',
                           alignItems: 'center',
@@ -190,18 +190,51 @@ const AoDocumentStagesMonitor = () => {
                           {isActive && (
                             <div style={{ position: 'absolute', inset: 0, opacity: 0.1, backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, #000 10px, #000 20px)' }} />
                           )}
-                          <span style={{
-                            fontSize: '10px',
-                            fontWeight: isActive ? '800' : '600',
-                            color: isActive ? colors.color : (isCompleted ? '#94a3b8' : '#cbd5e1'),
+                          <div style={{
                             zIndex: 1,
                             display: 'flex',
+                            flexDirection: 'column',
                             alignItems: 'center',
-                            gap: '4px'
+                            justifyContent: 'center',
+                            gap: '2px'
                           }}>
-                            {isCompleted && <CheckCircle size={10} />}
-                            {STAGE_LABELS[stg]}
-                          </span>
+                            <span style={{
+                              fontSize: '10px',
+                              fontWeight: isActive ? '800' : '600',
+                              color: isActive ? colors.color : (isCompleted ? '#94a3b8' : '#cbd5e1'),
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              {isCompleted && <CheckCircle size={10} />}
+                              {STAGE_LABELS[stg]}
+                            </span>
+                            {stg === 'PREPARATION' && job.email_draft_date && (
+                              <span style={{ fontSize: '9px', fontWeight: '500', color: isActive ? colors.color : '#94a3b8' }}>
+                                {new Date(job.email_draft_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            )}
+                            {stg === 'DRAFT' && job.email_ori_date && (
+                              <span style={{ fontSize: '9px', fontWeight: '500', color: isActive ? colors.color : '#94a3b8' }}>
+                                {new Date(job.email_ori_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            )}
+                            {stg === 'FINAL_DRAFT' && job.telex_date && (
+                              <span style={{ fontSize: '9px', fontWeight: '500', color: isActive ? colors.color : '#94a3b8' }}>
+                                {new Date(job.telex_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            )}
+                            {stg === 'ORIGINAL' && job.courier_date && (
+                              <span style={{ fontSize: '9px', fontWeight: '500', color: isActive ? colors.color : '#94a3b8' }}>
+                                {new Date(job.courier_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            )}
+                            {stg === 'SUBMIT_BANK' && job.submit_bank_date && (
+                              <span style={{ fontSize: '9px', fontWeight: '500', color: isActive ? colors.color : '#94a3b8' }}>
+                                {new Date(job.submit_bank_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {idx < STAGES.length - 1 && (
                           <ChevronRight size={14} style={{ color: (idx < stageIndex) ? '#94a3b8' : '#e2e8f0', flexShrink: 0 }} />
