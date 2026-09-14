@@ -123,6 +123,16 @@ const DUMMY_USERS = [
     departemen: 'Administrasi Export',
     level_otoritas: 'Supervisor',
   },
+  {
+    id: 104,
+    name: 'Vicky',
+    nama: 'Vicky',
+    tipe_karyawan: 'Karyawan Tetap',
+    status_aktif: true,
+    employee_id: 'SPV-AO-01',
+    departemen: 'Account Officer',
+    level_otoritas: 'Supervisor',
+  },
 
   // ── Manager ─────────────────────────────────────────────────────────────────
   {
