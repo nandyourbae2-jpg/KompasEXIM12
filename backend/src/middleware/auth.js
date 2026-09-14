@@ -2,10 +2,9 @@ const jwt = require('jsonwebtoken');
 const { AuthError, AuthorizationError } = require('../utils/errors');
 const logger = require('../utils/logger');
 const RequestContext = require('../utils/RequestContext');
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  logger.error('FATAL_ERROR', { reason: 'JWT_SECRET environment variable is missing' });
-  throw new Error('FATAL: JWT_SECRET environment variable is not defined.');
+const JWT_SECRET = process.env.JWT_SECRET || 'kompas_exim_secret_key_2026';
+if (JWT_SECRET === 'kompas_exim_secret_key_2026') {
+  logger.warn('SECURITY_WARNING', { reason: 'Using default JWT_SECRET. Do not use in production!' });
 }
 
 function authenticateToken(req, res, next) {
