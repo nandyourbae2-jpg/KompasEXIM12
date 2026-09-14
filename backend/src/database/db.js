@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
-const dbPath = process.env.DB_PATH || path.join(__dirname, '../../kompas-exim.db');
+const dbFile = process.env.NODE_ENV === 'test' ? 'kompas-exim-test.db' : 'kompas-exim.db';
+const dbPath = process.env.DB_PATH || path.join(__dirname, '../../', dbFile);
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');

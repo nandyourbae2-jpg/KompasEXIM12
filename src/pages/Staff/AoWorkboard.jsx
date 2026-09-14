@@ -1343,6 +1343,7 @@ const AoInlineWorkstation = ({ job, onClose, onSaved }) => {
             <button
               type="button"
               className="ao-wb-btn-complete-shipment"
+              data-testid="ao-workboard-complete"
               disabled={saving}
               onClick={handleComplete}
             >
@@ -1353,6 +1354,7 @@ const AoInlineWorkstation = ({ job, onClose, onSaved }) => {
           <button
             type="button"
             className="ao-wb-btn-save-inline"
+            data-testid="ao-workboard-save"
             disabled={saving}
             onClick={handleSave}
           >

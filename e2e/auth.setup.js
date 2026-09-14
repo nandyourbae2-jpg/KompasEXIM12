@@ -5,37 +5,75 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const authFile = path.join(__dirname, '../playwright/.auth/ao-user.json');
+const authRoles = [
+  {
+    name: 'Account Officer (AO)',
+    file: 'ao-user.json',
+    akses: 'Staff Departemen',
+    departemen: 'Account Officer',
+    id: 'EXIM-AO-01',
+    password: '123456',
+    verifyText: /Job Saya|Pekerjaan Saya|Task Map/i
+  },
+  {
+    name: 'Admin Export (AE)',
+    file: 'ae-user.json',
+    akses: 'Staff Departemen',
+    departemen: 'Administrasi Export',
+    id: 'AE-001',
+    password: '123456',
+    verifyText: /Workboard/i
+  },
+  {
+    name: 'Import Ops',
+    file: 'import-user.json',
+    akses: 'Staff Departemen',
+    departemen: 'Import',
+    id: 'EXIM-IMP-02',
+    password: '123456',
+    verifyText: /Import/i
+  },
+  {
+    name: 'Manager',
+    file: 'manager-user.json',
+    akses: 'Manager',
+    departemen: '', 
+    id: 'MGR-001',
+    password: '123456',
+    verifyText: /Manager/i
+  },
+  {
+    name: 'Supervisor AO',
+    file: 'supervisor-ao.json',
+    akses: 'Supervisor',
+    departemen: '', // Spv login form in this app usually just selects 'Supervisor'
+    id: 'SPV-AO-01',
+    password: '123456',
+    verifyText: /Peta Tugas|Dashboard/i
+  }
+];
 
-setup('authenticate as Account Officer', async ({ page }) => {
-  // Go to the login page
-  await page.goto('/');
+for (const role of authRoles) {
+  setup(`authenticate as ${role.name}`, async ({ page }) => {
+    const authFile = path.join(__dirname, '../playwright/.auth/', role.file);
+    
+    await page.goto('/#/login');
+    
+    await page.getByTestId('login-tipe-akses').selectOption(role.akses);
+    
+    if (role.akses === 'Staff Departemen') {
+        await page.getByTestId('login-departemen').selectOption(role.departemen);
+    }
 
-  // Make sure we are redirected to login if unauthenticated or already at login
-  // Since the base URL is http://localhost:5173, the root '/' usually redirects to '/login' or shows Landing Page.
-  // The app uses hash router, so let's go to /#/login explicitly just in case, but clicking login button from landing is better.
-  
-  await page.goto('/#/login');
-  
-  // Fill the login form
-  // We need to add data-testid to these fields in LoginPage.jsx!
-  await page.getByTestId('login-tipe-akses').selectOption('Staff Departemen');
-  await page.getByTestId('login-departemen').selectOption('Account Officer');
-  await page.getByTestId('login-employee-id').fill('EXIM-AO-01');
-  await page.getByTestId('login-password').fill('123456');
-  
-  // Submit
-  await page.getByTestId('login-submit-button').click();
-
-  // Wait until the page receives the token and navigates to workspace
-  await page.waitForURL('**/workspace**');
-
-  // Verify that the workspace is loaded by checking a heading or sidebar
-  // (We use a more generic text that exists on the workspace page, e.g. "Job Saya" or a known navigation item)
-  await expect(page.getByText(/Job Saya|Pekerjaan Saya/i).first()).toBeVisible();
-
-  // End of authentication steps.
-  
-  // Save storage state into the file.
-  await page.context().storageState({ path: authFile });
-});
+    
+    await page.getByTestId('login-employee-id').fill(role.id);
+    await page.getByTestId('login-password').fill(role.password);
+    
+    await page.getByTestId('login-submit-button').click();
+    
+    await page.waitForURL('**/workspace**');
+    await expect(page.getByText(role.verifyText).first()).toBeVisible();
+    
+    await page.context().storageState({ path: authFile });
+  });
+}

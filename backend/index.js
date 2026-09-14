@@ -43,6 +43,10 @@ if (!fs.existsSync(uploadsDir)) {
 // Serve static files from uploads
 app.use('/uploads', express.static(uploadsDir));
 
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', environment: process.env.NODE_ENV });
+});
+
 // MOUNT VERSIONED ROUTERS
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');

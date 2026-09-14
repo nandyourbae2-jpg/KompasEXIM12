@@ -423,6 +423,9 @@ const PaymentDashboard = () => {
           <p style={styles.subtitle}>Proses pembayaran seluruh tagihan yang sudah diteruskan dari Financial Commitment Workspace</p>
         </div>
         <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+          <Button variant="primary" onClick={() => setIsAddOpen(true)} icon={<Plus size={16} />}>
+            Tambah Tagihan
+          </Button>
           <Button variant="secondary" onClick={handleExport} icon={<Download size={16} />}>
             Export Excel
           </Button>

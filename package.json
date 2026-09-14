@@ -14,6 +14,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:ci": "playwright test",
+    "test:e2e:report": "playwright show-report",
     "backend:test": "NODE_ENV=test DB_PATH=backend/kompas-exim-test.db node --env-file=backend/.env backend/index.js",
     "coverage": "vitest run --coverage",
     "tunnel": "cloudflared tunnel --protocol http2 --edge-ip-version 4 --url http://127.0.0.1:5173"
